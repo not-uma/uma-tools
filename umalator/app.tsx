@@ -19,7 +19,7 @@ import { HorseDef, horseDefTabs, isGeneralSkill } from '../components/HorseDef';
 import { extendStrings, TRACKNAMES_ja, TRACKNAMES_en, COMMON_STRINGS } from '../strings/common';
 
 import { getActivateableSkills, getNullRow, BasinnChart } from './BasinnChart';
-import { UmaRankChart, getUmaEntries, getNullUmaRow, aptitudesForCourse, ALL_STRATEGIES, STRATEGY_LABELS, alreadyCovered, stripOwnUnique } from './UmaRankChart';
+import { UmaRankChart, getUmaEntries, getNullUmaRow, aptitudesForCourse, ALL_STRATEGIES, STRATEGY_LABELS, alreadyCovered, stripOwnUnique, UMARANK_BUILD } from './UmaRankChart';
 import { StaCalcResults } from './StaCalc';
 
 import { initTelemetry, postEvent } from './telemetry';
@@ -959,6 +959,8 @@ function Umalator(props) {
 		postEvent('doUmaRank', {});
 		const active = umaEntries.filter(e => umaRankStyles.has(e.strategy));
 		const rankUma = includeUmaSkills ? stripOwnUnique(uma1) : uma1;
+		console.log('[uma ranking]', UMARANK_BUILD, '- baseline skills:', rankUma.skills.size,
+			'(stripped own unique:', uma1.skills.size - rankUma.skills.size, ')');
 		const filler = new Map();
 		active.forEach(e => filler.set(e.key, getNullUmaRow(e)));
 		setUmaRankData(filler);
