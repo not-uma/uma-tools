@@ -129,6 +129,21 @@ export function alreadyCovered(id: string, equipped: Map<string,string>) {
 	return have != null && skillRank(have) >= skillRank(id);
 }
 
+// The uma picked in the left panel carries its own base unique in `skills`.
+// Leaving it on the baseline would zero out that uma's own row AND hand every
+// other row a baseline that already has a unique on it, so it comes off.
+// Inherited uniques (id starting with 9) are left alone -- those are handled
+// by the swap logic instead.
+export function isBaseUnique(id: string) {
+	return id[0] != '9' && id in skilldata && skilldata[id].rarity >= 4;
+}
+
+export function stripOwnUnique(uma) {
+	const skills = new Map();
+	uma.skills.forEach((id, group) => { if (!isBaseUnique(id)) skills.set(group, id); });
+	return {...uma, skills};
+}
+
 export function inheritedFormOf(uniqueId: string) {
 	const inh = '9' + uniqueId.slice(1);
 	return inh in skilldata ? inh : null;
