@@ -18,6 +18,11 @@ import skillmeta from '../skill_meta.json';
 import skillnames from '../uma-skill-tools/data/skillnames.json';
 import umas from '../umas.json';
 
+// Bump this whenever UmaRankChart/app.tsx change, so you can confirm in the
+// browser which build is actually live:
+//   document.querySelector('[data-umarank-build]').dataset.umarankBuild
+export const UMARANK_BUILD = 'umarank-9-threestar-unique';
+
 const APT = ' GFEDCBA';
 // Internal strategy identifiers the simulator expects, and the English names
 // the game uses for them (matching strings/common.ts).
