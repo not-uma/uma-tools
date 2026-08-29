@@ -78,7 +78,12 @@ export function getUmaEntries() {
 		const uma = umas[uid];
 		Object.keys(uma.outfits).forEach(oid => {
 			const o = uma.outfits[oid];
-			const unique = uniqueSkillForUma(oid, o.rarity);
+			// Always use the 3-star+ unique. 17 outfits have a base star of 2, whose
+			// unique is a WEAKER, differently-named skill (Mejiro Ryan's "Feel the
+			// Burn!" vs "Let's Pump Some Iron!"). Those 2-star forms have no
+			// inherited version in the data, so the swap could never match, and
+			// nobody races them at 2 stars anyway.
+			const unique = uniqueSkillForUma(oid, Math.max(o.rarity, 3) as 3 | 4 | 5);
 			if (!unique || !(unique in skilldata)) return;
 			const awakenings = dedupeAwakenings(o.awakenings);
 			const aptitudes = o.aptitudes.map(i => APT[i]);
@@ -135,7 +140,9 @@ export function alreadyCovered(id: string, equipped: Map<string,string>) {
 // Inherited uniques (id starting with 9) are left alone -- those are handled
 // by the swap logic instead.
 export function isBaseUnique(id: string) {
-	return id[0] != '9' && id in skilldata && skilldata[id].rarity >= 4;
+	// rarity 3 is the 2-star form of a unique, 4 and 5 are the 3-star+ forms.
+	// All non-inherited skills at rarity >= 3 are uniques, nothing else.
+	return id[0] != '9' && id in skilldata && skilldata[id].rarity >= 3;
 }
 
 export function stripOwnUnique(uma) {
@@ -405,7 +412,7 @@ export function UmaRankChart(props) {
 	}
 
 	return (
-		<div class={`umaRankChartWrapper${props.dirty ? ' dirty' : ''}`}>
+		<div class={`umaRankChartWrapper${props.dirty ? ' dirty' : ''}`} data-umarank-build={UMARANK_BUILD}>
 			<table class="umaRankChart">
 				<thead>
 					{table.getHeaderGroups().map(headerGroup => (
