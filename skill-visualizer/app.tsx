@@ -1,0 +1,270 @@
+import { h, render } from 'preact';
+import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
+import { Text, IntlProvider } from 'preact-i18n';
+
+import { State, makeState } from '../optics';
+
+import { Language, LanguageSelect, useLanguageSelect } from '../components/Language';
+import { SkillList, ExpandedSkillDetails } from '../components/SkillList';
+import { RaceTrack, TrackSelect, RegionDisplayType } from '../components/RaceTrack';
+import { extendStrings, TRACKNAMES_ja, TRACKNAMES_en, COMMON_STRINGS } from '../strings/common';
+
+import skills from '../uma-skill-tools/data/skill_data.json';
+import skillnames from '../uma-skill-tools/data/skillnames.json';
+import skillmeta from '../skill_meta.json';
+
+import { Region, RegionList } from '../uma-skill-tools/Region';
+import { CourseData, CourseHelpers } from '../uma-skill-tools/CourseData';
+import { HorseParameters, Strategy, Aptitude } from '../uma-skill-tools/HorseTypes';
+import { getParser } from '../uma-skill-tools/ConditionParser';
+import { buildSkillData, Perspective } from '../uma-skill-tools/RaceSolverBuilder';
+import { ImmediatePolicy } from '../uma-skill-tools/ActivationSamplePolicy';
+import { Conditions, immediate, noopImmediate, random, noopRandom } from '../uma-skill-tools/ActivationConditions';
+import type { RaceParameters } from '../uma-skill-tools/RaceParameters';
+
+import '../components/Tooltip.css';
+import './app.css';
+
+const DefaultCourseId = 10903;
+
+const UI_ja = Object.freeze({
+	'title': 'ウマ娘スキル発動位置可視化ツール',
+	'addskill': '+ スキル追加',
+	'joiner': '、',
+	'notice': Object.freeze({
+		'dna': 'このコースではこのスキルは発動しない',
+		'error': '発動条件を解析しながらエラーが出た'
+	})
+});
+
+const UI_en = Object.freeze({
+	'title': 'Umamusume Skill Activation Visualizer',
+	'addskill': '+ Add Skill',
+	'joiner': ',',
+	'notice': Object.freeze({
+		'dna': 'This skill does not activate on this track',
+		'error': 'Error parsing activation conditions'
+	})
+});
+
+const UI_STRINGS = {
+	'ja': UI_ja,
+	'en': UI_en,
+	'en-ja': UI_en,
+	'en-global': UI_en
+};
+
+const horse = Object.freeze({
+	speed: 2000,
+	stamina: 2000,
+	power: 2000,
+	guts: 2000,
+	wisdom: 2000,
+	strategy: Strategy.Nige,
+	distanceAptitude: Aptitude.S,
+	surfaceAptitude: Aptitude.A,
+	strategyAptitde: Aptitude.A,
+	rawStamina: 2000
+});
+
+function baseSpeed(distance: number) {
+	return 20.0 - (distance - 2000) / 1000.0;
+}
+
+const conditions = Object.freeze(Object.assign({}, Conditions, {
+	accumulatetime: immediate({
+		filterGte(regions: RegionList, t: number, course: CourseData, _: HorseParameters, extra: RaceParameters) {
+			// obviously we can't know this condition without actually running the race, and the actual distance traveled depends on the uma's strategy, power stat,
+			// skills (opening leg accel skills), and other things that aren't available in a static environment like this. so instead guess approximately how far we
+			// travel in t seconds by just using the course base speed.
+			// this will typically be a bit high since umas need to accelerate and non-nige strategies have lower than 1.0 StrategyPhaseCoefficient for phase 0
+			// except for oonige in which case it could be a bit low since their phase 0 speed is so high
+			const estimate = new Region(baseSpeed(course.distance) * t, course.distance);
+			return regions.rmap(r => r.intersect(estimate));
+		}
+	}),
+	activate_count_all: noopRandom,
+	activate_count_end_after: random({
+		filterGte(regions: RegionList, _0: number, course: CourseData, _1: HorseParameters, extra: RaceParameters) {
+			const bounds = new Region(CourseHelpers.phaseStart(course.distance, 2), CourseHelpers.phaseEnd(course.distance, 3));
+			return regions.rmap(r => r.intersect(bounds));
+		}
+	}),
+	activate_count_heal: noopRandom,
+	activate_count_later_half: random({
+		filterGte(regions: RegionList, _0: number, course: CourseData, _1: HorseParameters, extra: RaceParameters) {
+			const bounds = new Region(course.distance / 2, course.distance);
+			return regions.rmap(r => r.intersect(bounds));
+		}
+	}),
+	activate_count_middle: random({
+		filterGte(regions: RegionList, n: number, course: CourseData, _1: HorseParameters, extra: RaceParameters) {
+			const bounds = new Region(CourseHelpers.phaseStart(course.distance, 1), CourseHelpers.phaseEnd(course.distance, 1));
+			return regions.rmap(r => r.intersect(bounds));
+		}
+	}),
+	activate_count_start: random({
+		filterGte(regions: RegionList, _0: number, course: CourseData, _1: HorseParameters, extra: RaceParameters) {
+			const bounds = new Region(CourseHelpers.phaseStart(course.distance, 0), CourseHelpers.phaseEnd(course.distance, 0));
+			return regions.rmap(r => r.intersect(bounds));
+		}
+	}),
+	grade: noopImmediate,
+	ground_condition: noopImmediate,
+	is_activate_any_skill: noopRandom,
+	is_activate_heal_skill: noopRandom,
+	is_activate_other_skill_detail: noopImmediate,
+	is_used_skill_id: noopImmediate,
+	motivation: noopImmediate,
+	popularity: noopImmediate,
+	running_style: noopImmediate,
+	running_style_count_nige_otherself: noopImmediate,
+	running_style_count_senko_otherself: noopImmediate,
+	running_style_count_sashi_otherself: noopImmediate,
+	running_style_count_oikomi_otherself: noopImmediate,
+	season: noopImmediate,
+	time: noopImmediate,
+	weather: noopImmediate
+}));
+
+const parser = getParser(conditions);
+
+function regionsForSkill(course: CourseData, skillId: string, color: {stroke: string, fill: string}) {
+	const wholeCourse = new RegionList();
+	wholeCourse.push(new Region(0, course.distance));
+	try {
+		const sds = buildSkillData(horse, horse, {}, course, wholeCourse, parser, skillId, Perspective.Any, true);
+		if (sds.length == 0) return [{err: false, type: RegionDisplayType.Immediate, regions: [], color}];
+		return sds.map(sd => ({
+			err: false,
+			type: sd.samplePolicy == ImmediatePolicy ? RegionDisplayType.Immediate : RegionDisplayType.Regions,
+			regions: sd.regions,
+			color,
+			height: 100
+		}));
+	} catch (e) {
+		return [{err: true, type: RegionDisplayType.Immediate, regions: [], color}];
+	}
+}
+
+function doesNotActivate(skillRegions) {
+	return skillRegions.regions.length == 0 || skillRegions.regions[0].start == 9999;
+}
+
+const colors = [
+	{stroke: 'rgb(205,11,11)', fill: 'rgba(247,115,115,0.3)'},
+	{stroke: 'rgb(28,61,106)', fill: 'rgba(47,103,177,0.3)'},
+	{stroke: 'rgb(114,76,132)', fill: 'rgba(182,153,196,0.3)'},
+	{stroke: 'rgb(36,106,99)', fill: 'rgba(61,177,166,0.3)'}
+];
+
+function App(props) {
+	const [language, setLanguage] = useLanguageSelect();
+	const [courseId, setCourseId] = useState(DefaultCourseId);
+	const [selectedSkills, setSelectedSkills] = useState(new Map());
+	const [skillsOpen, setSkillsOpen] = useState(false);
+
+	useEffect(function () {
+		function loadState() {
+			// i think not resetting cid on an sid-only string but resetting sid on a cid-only string is the most intuitive
+			// thing to do? not really sure but i think that's what i'd expect
+			const cid = /cid=(\d+)/.exec(window.location.hash);
+			if (cid != null) setCourseId(cid[1]);
+			const sid = /sid=(\d+(?:,\d+)*)/.exec(window.location.hash);
+			setSelectedSkills(sid != null ? new Map(sid[1].split(',').filter(Boolean).map(id => [id, id])) : new Map());
+		}
+		loadState();
+		window.addEventListener('hashchange', loadState);
+		return () => window.removeEventListener('hashchange', loadState);
+	}, []);
+
+	useEffect(function () {
+		document.title = UI_STRINGS[language].title;
+	}, [language]);
+
+	const nonfirst = useRef(false);
+	useEffect(function () {
+		if (nonfirst.current) window.location.replace(`#cid=${courseId}${selectedSkills.size == 0 ? "" : ",sid="}${Array.from(selectedSkills.values()).join(',')}`);
+		nonfirst.current = true;
+	}, [courseId, selectedSkills]);
+
+	function setSelectedSkillsAndClose(ids) {
+		setSelectedSkills(ids);
+		setSkillsOpen(false);
+	}
+	
+	function showSkillSelector(e) {
+		setSkillsOpen(true);
+	}
+	
+	function hideSkillSelector(e) {
+		setSkillsOpen(false);
+	}
+	
+	function removeSkill(e) {
+		const se = e.target.closest('.expandedSkill');
+		if (se == null) return;
+		e.stopPropagation();
+		const id = se.dataset.skillid;
+		const newSelected = new Map(selectedSkills);
+		newSelected.delete(id);
+		setSelectedSkills(newSelected);
+	}
+
+	const strings = {skillnames: {}, tracknames: language == 'ja' ? TRACKNAMES_ja : TRACKNAMES_en, common: COMMON_STRINGS[language], ui: UI_STRINGS[language]};
+	const langid = +(language == 'en');
+	Object.keys(skillnames).forEach(id => strings.skillnames[id] = skillnames[id][langid]);
+
+	const course = CourseHelpers.getCourse(courseId);
+
+	const regions = useMemo(() => Array.from(selectedSkills.values()).flatMap((id,i) => regionsForSkill(course, id, colors[i % colors.length])), [selectedSkills, course]);
+	const skillDetails = useMemo(function () {
+		return Array.from(selectedSkills.values()).map(function (id, i) {
+			const hasNotice = regions[i].err || doesNotActivate(regions[i]);
+			return (
+				<li class={`expandedSkillItem${hasNotice ? ' hasNotice' : ''}`}>
+					{regions[i].err && <div class="skillNotice hasTooltip"><span>×</span><div class="tooltip"><Text id="ui.notice.error" /><span class="arrow" /></div></div>}
+					{!regions[i].err && doesNotActivate(regions[i]) && <div class="skillNotice hasTooltip"><span>!</span><div class="tooltip"><Text id="ui.notice.dna" /><span class="arrow" /></div></div>}
+					<div class="expandedSkillColorMarker" style={`background:${colors[i % colors.length].stroke}`} />
+					<ExpandedSkillDetails id={id} distanceFactor={course.distance} />
+				</li>
+			);
+		});
+	}, [selectedSkills, course, regions]);
+
+	return (
+		<State.Provider value={makeState(() => ({}))}>
+			<Language.Provider value={language}>
+				<IntlProvider definition={strings}>
+					<div id="overlay" class={skillsOpen ? "skillListWrapper-open" : ""} onClick={hideSkillSelector} />
+					{!CC_GLOBAL && <LanguageSelect language={language} setLanguage={setLanguage} />}
+					<RaceTrack courseid={courseId} width={960} height={240} xOffset={0} yOffset={0} yExtra={0} regions={regions} />
+					<div id="buttonsRow">
+						<TrackSelect courseid={courseId} setCourseid={setCourseId} />
+						<button id="addSkill" onClick={showSkillSelector}><Text id="ui.addskill" /></button>
+					</div>
+					<div id="skillDetailsWrapper" onClick={removeSkill}>
+						<ul class="skillDetailsList">
+							{skillDetails}
+						</ul>
+					</div>
+					<div id="skillListWrapper" class={skillsOpen ? "skillListWrapper-open" : ""}>
+						<SkillList ids={Object.keys(skills)} selectionMode="all" debuffMode="once" selected={selectedSkills} setSelected={setSelectedSkillsAndClose} />
+					</div>
+				</IntlProvider>
+			</Language.Provider>
+		</State.Provider>
+	);
+}
+
+// see the comments at the bottom of umalator/app.tsx
+try {
+	window.parent && window.parent.location.hostname;
+	render(<App lang={CC_GLOBAL?"en-global":"ja"} />, document.getElementById('app'));
+} catch (e) {
+	if (e instanceof DOMException) {
+		document.getElementById('app').innerHTML = '<p style="font-size:22px"><span style="border:3px solid orange;border-radius:3em;color:orange;display:inline-block;font-weight:bold;height:1.8em;line-height:1.8em;text-align:center;width:1.8em">!</span> You are probably on some kind of scummy ad-infested rehosting site. The official URL for the Skill Visualizer is <a href="https://alpha123.github.io/uma-tools/skill-visualizer-global/" target="_blank">https://alpha123.github.io/uma-tools/skill-visualizer-global/</a>.</p>'
+	} else {
+		throw e;
+	}
+}

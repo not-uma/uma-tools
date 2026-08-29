@@ -1,0 +1,115 @@
+.horseOcr {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+}
+
+.horseOcrContent {
+	align-items: center;
+	display: flex;
+	gap: 60px;
+	height: calc(100% - 2.7em - 4px);
+}
+
+.horseOcrButtons {
+	display: flex;
+	gap: 12px;
+	margin: 10px auto;
+	width: fit-content;
+}
+
+.horseOcrButtons > button {
+	min-width: 120px;
+}
+
+.ocrImageGrid {
+	display: grid;
+	gap: 24px;
+	/*grid-template: repeat(auto-fit, minmax(0, 1fr)) / repeat(2, max-content);*/
+	grid-template-columns: repeat(2, max-content);
+	height: 100%;
+}
+
+.ocrImageWrapper {
+	height: 100%;
+	min-height: 0;
+	position: relative;
+}
+
+.ocrImageWrapper > img {
+	border-radius: 6px;
+	height: 100%;
+}
+
+.ocrImageWrapper > .circleBtn {
+	box-shadow: none;
+	height: 24px;
+	line-height: 22px;
+	position: absolute;
+	right: -18px;
+	top: -18px;
+	width: 24px;
+	z-index: 1;
+}
+
+.ocrRightPane {
+	flex: 1;
+	height: 100%;
+}
+
+.ocrUploadWrapper {
+	align-items: center;
+	display: flex;
+	height: 100%;
+	justify-content: center;
+}
+
+.ocrUploadWrapper input { display: none; }
+
+.ocrUpload {
+	background: none;
+	border: none;
+	color: rgb(121, 64, 22);
+	display: flex;
+	flex-direction: column;
+	font-size: 1.5em;
+	font-weight: bold;
+}
+
+.ocrUpload > :first-child {
+	border-bottom: 2px solid rgb(121, 64, 22);
+	border-image: linear-gradient(to top, rgb(121, 64, 22) 35%, transparent 35%) 1;
+	border-width: 8px;
+	border-style: solid;
+	border-top: none;
+	font-size: 4em;
+}
+
+.ocrLoading {
+	font-size: 2em;
+}
+
+.ocrResolvePrompt {
+	height: 100%;
+	overflow: auto;
+	width: 100%;
+}
+
+.ocrResolvePrompt > span {
+	font-size: 1.2em;
+}
+
+/* perhaps ill advised attempt to make the sizes match screenshots more closely, which in my opinion makes comparing easier */
+.ocrRightPane .horseDef { font-size: 14px; height: 100%; }
+.ocrRightPane .horseParam { padding: 6px; }
+.ocrRightPane .horseAptitudes > div, .horseFullAptitudes > div { height: 1.6em; }
+.ocrRightPane .horseFullAptitudes { gap: 6px 10px; }
+.ocrRightPane .horseSkillHeader { margin: 10px auto; }
+.ocrRightPane .horseDef { width: 640px; }
+
+@media (orientation: portrait) {
+	.horseOcrContent {
+		flex-direction: column;
+	}
+}

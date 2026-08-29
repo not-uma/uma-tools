@@ -1,0 +1,712 @@
+import { h, Fragment, cloneElement } from 'preact';
+import { useState, useReducer, useMemo, useLayoutEffect, useRef } from 'preact/hooks';
+import { memo } from 'preact/compat';
+import { IntlProvider, Text, Localizer, useText } from 'preact-i18n';
+
+import { O, c, id, useLens, useGetter, useSetter, useInspectState, Delete } from '../optics';
+
+import { useLanguage } from '../components/Language';
+import { SkillList, Skill, ExpandedSkillDetails, SkillCost } from '../components/SkillList';
+import { COMMON_STRINGS } from '../strings/common';
+
+import { HorseParameters } from '../uma-skill-tools/HorseTypes';
+
+import { SkillSet, HorseState, uniqueSkillForUma, serializeUma, deserializeUma } from './HorseDefTypes';
+import { HorseOcr } from './HorseOcr';
+import { HorseSaveManager } from './HorseSaveMngr';
+import { scoreUma, RankThresholds } from './scorecalc';
+
+import './HorseDef.css';
+
+import umas from '../umas.json';
+import icons from '../icons.json';
+import skilldata from '../uma-skill-tools/data/skill_data.json';
+import skillmeta from '../skill_meta.json';
+
+const STRINGS_ja = Object.freeze({
+	'ocrtip': 'Read from screenshot (beta)',
+	'select': Object.freeze({
+		'strategy': '作戦',
+		'surfaceaptitude': 'バ場適性',
+		'distanceaptitude': '距離適正',
+		'strategyaptitude': '脚質適正'
+	}),
+	'selectshort': Object.freeze({
+		'surfaceaptitude': 'バ場適性',
+		'distanceaptitude': '距離適正',
+		'strategyaptitude': '脚質適正'
+	}),
+	'shortstrategy': COMMON_STRINGS['ja']['strategy'],
+	'skillheader': 'スキル',
+	'addskill': 'スキル追加',
+	'moodfmt': '調子：{{mood}}',
+	'popularity': Object.freeze({
+		'pre': '',
+		'post': '番人気'
+	})
+});
+
+const STRINGS_en = Object.freeze({
+	'ocrtip': 'Read from screenshot (beta)',
+	'select': Object.freeze({
+		'strategy': 'Strategy:',
+		'surfaceaptitude': 'Surface aptitude:',
+		'distanceaptitude': 'Distance aptitude:',
+		'strategyaptitude': 'Strategy aptitude:'
+	}),
+	'selectshort': Object.freeze({
+		'surfaceaptitude': 'Surface',
+		'distanceaptitude': 'Distance',
+		'strategyaptitude': 'Strategy'
+	}),
+	'shortstrategy': COMMON_STRINGS['en']['strategy'],
+	'skillheader': 'Skills',
+	'addskill': 'Add Skill',
+	'moodfmt': 'Motivation: {{mood}}',
+	'popularity': Object.freeze({
+		'pre': 'Popularity:',
+		'post': ''
+	})
+});
+
+const STRINGS_global = Object.freeze({
+	'ocrtip': 'Read from screenshot (beta)',
+	'select': Object.freeze({
+		'strategy': 'Style:',
+		'surfaceaptitude': 'Surface aptitude:',
+		'distanceaptitude': 'Distance aptitude:',
+		'strategyaptitude': 'Style aptitude:'
+	}),
+	'selectshort': Object.freeze({
+		'surfaceaptitude': 'Track',
+		'distanceaptitude': 'Distance',
+		'strategyaptitude': 'Style'
+	}),
+	'shortstrategy': Object.freeze(['', 'Front', 'Pace', 'Late', 'End']),
+	'skillheader': 'Skills',
+	'addskill': 'Add Skill',
+	'moodfmt': 'Mood: {{mood}}',
+	'popularity': Object.freeze({
+		'pre': 'No.',
+		'post': 'Fav'
+	})
+});
+
+const STRINGS = {
+	'ja': STRINGS_ja,
+	'en': STRINGS_en,
+	'en-ja': STRINGS_en,
+	'en-global': STRINGS_global
+};
+
+const umaAltIds = Object.keys(umas).flatMap(id => Object.keys(umas[id].outfits));
+const umaNamesForSearch = {};
+umaAltIds.forEach(id => {
+	const u = umas[id.slice(0,4)];
+	umaNamesForSearch[id] = (u.outfits[id] + ' ' + u.name[1]).toUpperCase().replace(/\./g, '');
+});
+
+function searchNames(query) {
+	const q = query.toUpperCase().replace(/\./g, '');
+	return umaAltIds.filter(oid => umaNamesForSearch[oid].indexOf(q) > -1);
+}
+
+function Star(props) {
+	const {starCount, minStarCount, n} = props;
+	const cls = ['umaStar'];
+	if (starCount >= n) cls.push('umaStarGte');
+	if (n <= minStarCount) cls.push('umaStarMin');
+	return <div class={cls.join(' ')} style={`z-index:${5-n}`} data-n={n}></div>
+}
+
+export function UmaSelector(props) {
+	const randomMob = useMemo(() => `/uma-tools/icons/mob/trained_mob_chr_icon_${8000 + Math.floor(Math.random() * 624)}_000001_01.png`, []);
+	const [value, setOutfitId] = useLens(props.outfitId);
+	const [starCount, setStarCount] = useLens(props.starCount);
+	const u = value && umas[value.slice(0,4)];
+	const minStarCount = u ? u.outfits[value].rarity : 1;
+
+	const input = useRef(null);
+	const suggestionsContainer = useRef(null);
+	const [open, setOpen] = useState(false);
+	const [activeIdx, setActiveIdx] = useState(-1);
+	function update(q) {
+		return {input: q, suggestions: searchNames(q)};
+	}
+	const [query, search] = useReducer((_,q) => update(q), u && u.name[1], update);
+
+	function confirm(oid) {
+		setOpen(false);
+		setOutfitId(oid);
+		const uname = umas[oid.slice(0,4)].name[1];
+		search(uname);
+		setActiveIdx(-1);
+		if (input.current != null) {
+			input.current.value = uname;
+			input.current.blur();
+		}
+	}
+
+	function focus() {
+		input.current && input.current.select();
+	}
+
+	function setActiveAndScroll(idx) {
+		setActiveIdx(idx);
+		if (!suggestionsContainer.current) return;
+		const container = suggestionsContainer.current;
+		const li = container.querySelector(`[data-uma-id="${query.suggestions[idx]}"]`);
+		const ch = container.offsetHeight - 4;  // 4 for borders
+		if (li.offsetTop < container.scrollTop) {
+			container.scrollTop = li.offsetTop;
+		} else if (li.offsetTop >= container.scrollTop + ch) {
+			const h = li.offsetHeight;
+			container.scrollTop = (li.offsetTop / h - (ch / h - 1)) * h;
+		}
+	}
+
+	function handleClick(e) {
+		const li = e.target.closest('.umaSuggestion');
+		if (li == null) return;
+		e.stopPropagation();
+		confirm(li.dataset.umaId);
+	}
+
+	function handleInput(e) {
+		search(e.target.value);
+	}
+
+	function handleKeyDown(e) {
+		const l = query.suggestions.length;
+		switch (e.keyCode) {
+			case 13:
+				if (activeIdx > -1) confirm(query.suggestions[activeIdx]);
+				break;
+			case 38:
+				setActiveAndScroll((activeIdx - 1 + l) % l);
+				break;
+			case 40:
+				setActiveAndScroll((activeIdx + 1 + l) % l);
+				break;
+		}
+	}
+
+	function handleBlur(e) {
+		if (e.target.value.length == 0) setOutfitId('');
+		setOpen(false);
+	}
+
+	function handleStarClick(e) {
+		const star = e.target.closest('.umaStar');
+		if (star == null) return;
+		setStarCount(Math.max(minStarCount, +star.dataset.n));
+	}
+
+	const rankIdx = useMemo(() => RankThresholds.findIndex(x => x > props.score), [props.score]);
+
+	return (
+		<div class="umaSelector">
+			<div class="umaSelectorIconsBox">
+				<div>
+					<img src={value ? `/uma-tools/icons/chara/${icons[value][1]}.png` : randomMob} width="120" height="120" onClick={focus} />
+					<div class="umaStarsRow" onClick={handleStarClick}>
+						<div class="umaStarContainer">
+							<Star starCount={starCount} minStarCount={minStarCount} n={1} />
+							<div class="umaStarContainer">
+								<Star starCount={starCount} minStarCount={minStarCount} n={2} />
+								<div class="umaStarContainer">
+									<Star starCount={starCount} minStarCount={minStarCount} n={3} />
+									<div class="umaStarContainer">
+										<Star starCount={starCount} minStarCount={minStarCount} n={4} />
+										<div class="umaStarContainer">
+											<Star starCount={starCount} minStarCount={minStarCount} n={5} />
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					{props.score > -1 && <span class="umaScore">{props.score.toLocaleString('ja-JP')}</span>}
+				</div>
+				{props.score > -1
+					? <img src={`/uma-tools/icons/rank/utx_txt_rank_${rankIdx}.png`} width="56" height="56" />
+					: <img src="/uma-tools/icons/utx_ico_umamusume_00.png" width="56" height="56" onClick={focus} />}
+			</div>
+			<div class="umaNameBox">
+				<div class="umaEpithet" onClick={focus}><span>{value && u.outfits[value].epithet}</span></div>
+				<div class="umaSelectWrapper">
+					<input type="text" class="umaSelectInput" value={query.input} tabindex={props.tabindex} onInput={handleInput} onKeyDown={handleKeyDown} onFocus={() => setOpen(true)} onBlur={handleBlur} ref={input} />
+					<ul class={`umaSuggestions ${open ? 'open' : ''}`} onMouseDown={handleClick} ref={suggestionsContainer}>
+						{query.suggestions.map((oid, i) => {
+							const uid = oid.slice(0,4);
+							return (
+								<li key={oid} data-uma-id={oid} class={`umaSuggestion ${i == activeIdx ? 'selected' : ''}`}>
+									<img src={`/uma-tools/icons/chara/${icons[oid][1]}.png`} loading="lazy" /><span>{umas[uid].outfits[oid].epithet} {umas[uid].name[1]}</span>
+								</li>
+							);
+						})}
+					</ul>
+				</div>
+			</div>
+			{props.score > -1 && <div class="umaChangeImgBox">
+				<img src="/uma-tools/icons/utx_ico_umamusume_00.png" width="56" height="56" onClick={focus} />
+			</div>}
+		</div>
+	);
+}
+
+function rankForStat(x: number) {
+	if (x > 2000) {
+		// over 2000 letter goes up by 125 and number goes up by 5, but grouped 1-5 instead of 0-4
+		return Math.min(98 + Math.floor((x - 2001) / 125) * 25 + Math.floor((x - 1) % 125 / 5), 297);
+	} else if (x > 1200) {
+		// over 1200 letter (eg UG) goes up by 100 and minor number (eg UG8) goes up by 10
+		return Math.min(18 + Math.floor((x - 1200) / 100) * 10 + Math.floor(x / 10) % 10, 97);
+	} else if (x >= 1150) {
+		return 17; // SS+
+	} else if (x >= 1100) {
+		return 16; // SS
+	} else if (x >= 400) {
+		// between 400 and 1100 letter goes up by 100 starting with C (8)
+		return 8 + Math.floor((x - 400) / 100);
+	} else {
+		// between 1 and 400 letter goes up by 50 starting with G+ (0)
+		return Math.floor(x / 50);
+	}
+}
+
+export function Stat(props) {
+	const [value, setValue] = useLens(props.value);
+	return (
+		<div class="horseParam">
+			<img src={`/uma-tools/icons/statusrank/utx_ico_statusrank_${rankForStat(value).toString().padStart(2,'0')}.png`} />
+			<input type="number" min="1" max="3000" value={value} tabindex={props.tabindex} onInput={(e) => setValue(+e.currentTarget.value)} />
+		</div>
+	);
+}
+
+const APTITUDES = Object.freeze(['S','A','B','C','D','E','F','G']);
+export function AptitudeIcon(props) {
+	const idx = 7 - APTITUDES.indexOf(props.a);
+	return <img src={`/uma-tools/icons/utx_ico_statusrank_${(100 + idx).toString().slice(1)}.png`} loading="lazy" />;
+}
+
+export function AptitudeSelect(props){
+	const [a, setA] = useLens(props.a);
+	const [open, setOpen] = useState(false);
+	function setAptitude(e) {
+		e.stopPropagation();
+		setA(e.currentTarget.dataset.horseAptitude);
+		setOpen(false);
+	}
+	function selectByKey(e: KeyboardEvent) {
+		const k = e.key.toUpperCase();
+		if (APTITUDES.indexOf(k) > -1) {
+			setA(k);
+			setOpen(false);
+		}
+	}
+	return (
+		<div class="horseAptitudeSelect" tabindex={props.tabindex} onClick={() => setOpen(!open)} onBlur={setOpen.bind(null, false)} onKeyDown={selectByKey}>
+			<span><AptitudeIcon a={a} /></span>
+			<ul style={open ? "display:block" : "display:none"}>
+				{APTITUDES.map(a => <li key={a} data-horse-aptitude={a} onClick={setAptitude}><AptitudeIcon a={a} /></li>)}
+			</ul>
+		</div>
+	);
+}
+
+export function StrategySelect(props) {
+	const [s, setS] = useLens(props.s);
+	return (
+		<select class="horseStrategySelect" value={s} tabindex={props.tabindex} onInput={(e) => setS(e.currentTarget.value)} style={CC_GLOBAL ? "text-align:left" : null}>
+			<option value="Nige"><Text id="common.strategy.1" /></option>
+			<option value="Senkou"><Text id="common.strategy.2" /></option>
+			<option value="Sasi"><Text id="common.strategy.3" /></option>
+			<option value="Oikomi"><Text id="common.strategy.4" /></option>
+			<option value="Oonige"><Text id="common.strategy.5" /></option>
+		</select>
+	);
+}
+
+export function MoodSelect(props) {
+	const infix = useLanguage() == 'ja' ? '' : '/global';
+	const [m, setM] = useLens(props.m);
+	function cycle() {
+		setM((m + 3) % 5 - 2);
+	}
+	function reverseCycle(e) {
+		e.preventDefault();
+		setM(((m + 1) % 5 + 5) % 5 - 2);
+	}
+	function selectByKey(e: KeyboardEvent) {
+		const n = parseInt(e.key,10);
+		if (!isNaN(n)) {
+			setM((n + 4) % 5 - 2);
+		}
+	}
+	const {[m+3]: mood} = useText('common.mood.' + (m+3));
+	return (
+		<Localizer>
+			<img src={`/uma-tools/icons${infix}/utx_ico_motivation_m_${(102+m).toString().slice(1)}.png`} tabindex={props.tabindex} title={<Text id="moodfmt" fields={{mood}} />} onClick={cycle} onContextMenu={reverseCycle} onKeyDown={selectByKey} />
+		</Localizer>
+	);
+}
+
+export function PopularitySelect(props) {
+	const lang = useLanguage();
+	const [p, setP] = useLens(props.p);
+	return (
+		<Fragment>
+			<Text id="popularity.pre" />
+			<input type="number" min="1" max="18" value={p} tabindex={props.tabindex} onInput={(e) => setP(+e.currentTarget.value)} />
+			<Text id="popularity.post" />
+		</Fragment>
+	);
+}
+
+const nonUniqueSkills = Object.keys(skilldata).filter(id => skilldata[id].rarity < 3 || skilldata[id].rarity > 5);
+const universallyAccessiblePinks = Object.keys(skilldata).filter(id => id[0] == '4' || id[0] == '9' && id.length > 6);
+
+export function isGeneralSkill(id: string) {
+	return skilldata[id].rarity < 3 || universallyAccessiblePinks.indexOf(id) > -1;
+}
+
+function skillOrder(a, b) {
+	const x = skillmeta[a].order, y = skillmeta[b].order;
+	return +(y < x) - +(x < y) || +(b < a) - +(a < b);
+}
+
+let totalTabs = 0;
+export function horseDefTabs() {
+	return totalTabs;
+}
+
+export const HorseDef = memo(function HorseDef(props) {
+	const lang = useLanguage();
+	const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+	const [ocrOpen, setOcrOpen] = useState(false);
+	const [saveMngrOpen, setSaveMngrOpen] = useState(false);
+	const [expanded, setExpanded] = useState(new Set());
+	const setUma = useSetter(props.state);
+	const strategy = useGetter(props.state.strategy);
+	// essentially what we want to do is:
+	//   - when the user selects oonige, the strategy should be set to oonige
+	//   - when the user removes oonige, the strategy should be set to whatever they had selected before
+	//   - if the user selects oonige and then changes the strategy manually and then adds another skill, the strategy should stay
+	//     on whatever they selected and not activate oonige again
+	//   - if the user then removes oonige and adds it again, it should be reset to oonige
+	const [oldStrategyState, updateOldStrategyState] = useReducer((ss, msg: boolean | string) => {
+		if (typeof msg == 'boolean') {
+			return {...ss, oonigeIsNew: msg};
+		}
+		return {...ss, old: msg};
+	}, {oonigeIsNew: true, old: strategy});
+	const [skills, setSkills] = useLens(useMemo(() => props.state._lens(x => x.skills, (f,state) => {
+		const newSkills = f(state.skills);
+		let strategy = state.strategy;
+		// groupId for 大逃げ skill
+		if (newSkills.has('20205') && oldStrategyState.oonigeIsNew) {
+			strategy = 'Oonige';
+			updateOldStrategyState(false);
+		} else if (!newSkills.has('20205')) {
+			strategy = oldStrategyState.old;
+			updateOldStrategyState(true);
+		}
+		return {...state, skills: newSkills, strategy};
+	}), [props.state, oldStrategyState]));
+
+	const tabstart = props.tabstart();
+	let tabi = 0;
+	function tabnext() {
+		if (++tabi > totalTabs) totalTabs = tabi;
+		return tabstart + tabi - 1;
+	}
+
+	const l_umaId = useMemo(() => props.state._lens(x => x.outfitId, (f,state) => {
+		const id = f(state.outfitId);
+		const newSkills = new Map();
+		state.skills.forEach((id,g) => isGeneralSkill(id) && newSkills.set(g, id));
+		let aptitudes = ['S','S','S','S','A','A','A','A','A','A'];
+		let starCount = state.starCount;
+		let strategy = state.strategy;
+		if (id) {
+			const u = umas[id.slice(0,4)].outfits[id];
+			aptitudes = u.aptitudes.map(i => ' GFEDCBA'[i]);
+			starCount = Math.max(starCount, u.rarity);
+			strategy = ['', 'Nige', 'Senkou', 'Sasi', 'Oikomi'][u.strategy];
+			const uid = uniqueSkillForUma(id, starCount);
+			newSkills.set(skillmeta[uid].groupId, uid);
+		}
+		const uniqueLv = starCount % 3 + Math.floor(starCount / 3);
+		return {...state, outfitId: id, starCount, uniqueLv, strategy, skills: newSkills, aptitudes};
+	}), [props.state]);
+	const umaId = useGetter(l_umaId);
+	const selectableSkills = useMemo(() => nonUniqueSkills.filter(id => skilldata[id].rarity != 6 || id.startsWith(umaId) || universallyAccessiblePinks.indexOf(id) != -1), [umaId]);
+
+	const l_starCount = useMemo(() => props.state._lens(x => x.starCount, (f,state) => {
+		const starCount = f(state.starCount);
+		let skills = state.skills;
+		const uniqueLv = starCount % 3 + Math.floor(starCount / 3);
+		if (state.outfitId) {
+			skills = new Map(state.skills);
+			const uid = uniqueSkillForUma(state.outfitId, starCount);
+			skills.set(skillmeta[uid].groupId, uid);
+		}
+		return {...state, starCount, uniqueLv, skills};
+	}), [props.state]);
+	const starCount = useGetter(l_starCount);
+
+	const l_uniqueLv = useMemo(() => props.state._lens(state => {
+		const min = state.starCount % 3 + Math.floor(state.starCount / 3);
+		const max = min + 3;
+		return [state.uniqueLv, min, max];
+	}, (f,state) => ({...state, uniqueLv: f(state.uniqueLv)})),
+	[props.state]);
+
+	const l_strategy = useMemo(() => props.state.strategy._lens(id, (f,strat) => {
+		const newStrat = f(strat);
+		updateOldStrategyState(newStrat);
+		return newStrat;
+	}), [props.state.strategy]);
+
+	function openSkillPicker(e) {
+		e.stopPropagation();
+		setSkillPickerOpen(true);
+	}
+
+	function setSkillsAndClose(skills) {
+		setSkills(skills);
+		setSkillPickerOpen(false);
+	}
+
+	function handleSkillClick(e) {
+		e.stopPropagation();
+		const seh = e.target.closest('.expandedSkillHeader');
+		const se = seh != null ? seh.parentNode : e.target.closest('.skill');
+		if (se == null) return;
+		if (e.target.classList.contains('skillDismiss')) {
+			// can't just remove skillmeta[skillid].groupId because debuffs will have a fake groupId
+			const k = Array.from(skills.entries()).find(([g,id]) => id == se.dataset.skillid)[0];
+			const newSkills = new Map(skills);
+			newSkills.delete(k);
+			setSkills(newSkills);
+		} else if (se.classList.contains('expandedSkill')) {
+			expanded.delete(se.dataset.skillid);
+			setExpanded(new Set(expanded));
+		} else {
+			expanded.add(se.dataset.skillid);
+			setExpanded(new Set(expanded));
+		}
+	}
+
+	useLayoutEffect(function () {
+		document.querySelectorAll('.horseExpandedSkill').forEach(e => {
+			(e as HTMLElement).style.gridRow = 'span ' + Math.ceil((e.firstChild as HTMLElement).offsetHeight / 64);
+		});
+	}, [expanded]);
+
+	function handleOcrAccept(ocrUma) {
+		if (props.course != null) {
+			ocrUma.distanceAptitude = ocrUma.aptitudes[props.course.distanceType - 1];
+			ocrUma.surfaceAptitude = ocrUma.aptitudes[7 + props.course.surface];
+			ocrUma.strategyAptitude = ocrUma.aptitudes[4 + ['Nige', 'Senkou', 'Sasi', 'Oikomi'].indexOf(ocrUma.strategy.replace('Oonige', 'Nige'))];
+		}
+		setUma(ocrUma);
+	}
+
+	function handleMngrLoad(loadedUma) {
+		setUma(loadedUma);
+		setSaveMngrOpen(false);
+	}
+
+	// calls tabnext() so must be called in the place it is used
+	function getAptitudesSection() {
+		switch (props.aptitudesMode) {
+		case 'simulation':
+			return (
+				<div class="horseAptitudes">
+					<div>
+						<span><Text id="select.surfaceaptitude" /></span>
+						<AptitudeSelect a={props.state.surfaceAptitude} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="select.distanceaptitude" /></span>
+						<AptitudeSelect a={props.state.distanceAptitude} tabindex={tabnext()} />
+					</div>
+					<div><MoodSelect m={props.state.mood} tabindex={tabnext()} /></div>
+					<div>
+						<span><Text id="select.strategy" /></span>
+						<StrategySelect s={l_strategy} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="select.strategyaptitude" /></span>
+						<AptitudeSelect a={props.state.strategyAptitude} tabindex={tabnext()} />
+					</div>
+					<div><PopularitySelect p={props.state.popularity} tabindex={tabnext()} /></div>
+				</div>
+			);
+		case 'full':
+			return (
+				<div class="horseFullAptitudes">
+					<div>
+						<span><Text id="selectshort.surfaceaptitude" /></span>
+					</div>
+					<div>
+						<span><Text id="common.surface.1" /></span>
+						<AptitudeSelect a={props.state.aptitudes[8]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="common.surface.2" /></span>
+						<AptitudeSelect a={props.state.aptitudes[9]} tabindex={tabnext()} />
+					</div>
+					<div></div>
+					<div></div>
+					<div>
+						<span><Text id="selectshort.distanceaptitude" /></span>
+					</div>
+					<div>
+						<span><Text id="common.distance.1" /></span>
+						<AptitudeSelect a={props.state.aptitudes[0]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="common.distance.2" /></span>
+						<AptitudeSelect a={props.state.aptitudes[1]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="common.distance.3" /></span>
+						<AptitudeSelect a={props.state.aptitudes[2]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="common.distance.4" /></span>
+						<AptitudeSelect a={props.state.aptitudes[3]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="selectshort.strategyaptitude" /></span>
+					</div>
+					<div>
+						<span><Text id="shortstrategy.1" /></span>
+						<AptitudeSelect a={props.state.aptitudes[4]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="shortstrategy.2" /></span>
+						<AptitudeSelect a={props.state.aptitudes[5]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="shortstrategy.3" /></span>
+						<AptitudeSelect a={props.state.aptitudes[6]} tabindex={tabnext()} />
+					</div>
+					<div>
+						<span><Text id="shortstrategy.4" /></span>
+						<AptitudeSelect a={props.state.aptitudes[7]} tabindex={tabnext()} />
+					</div>
+				</div>
+			);
+		}
+	}
+
+	const courseDistance = props.course ? props.course.distance : 0;
+	const skillList = useMemo(function () {
+		const u = uniqueSkillForUma(umaId, starCount);
+		return Array.from(skills.values()).sort(skillOrder).map(id =>
+			expanded.has(id)
+				? <li key={id} class="horseExpandedSkill">
+					  <ExpandedSkillDetails id={id} distanceFactor={courseDistance} lv={id == u && l_uniqueLv} dismissable={id != u}
+						  samplePolicy={props.showPolicyEd ? props.state.samplePolicies.get(id) : null}
+						  topChildren={props.hintLevels && <SkillCost id={id} hints={props.hintLevels} ownedSkills={new Map() /* ignore the fact that we own them or the cost would always be 0 */} />} />
+					  {props.skillExtra && cloneElement(props.skillExtra, {id})}
+				  </li>
+				: <li key={id} style="">
+					  <Skill id={id} selected={false} lv={id == u && l_uniqueLv} dismissable={id != u} />
+					  {props.skillExtra && cloneElement(props.skillExtra, {id})}
+				  </li>
+		);
+	}, [skills, umaId, expanded, courseDistance, props.hintLevels, props.showPolicyEd, props.skillExtra]);
+
+	let score = -1;
+	if (props.showScore) {
+		const uma_ = useGetter(props.state);  // OK to call hook; props.showScore doesn't change
+		score = useMemo(() => scoreUma(uma_), [uma_]);
+	}
+
+	const uma_GetCurrent = useInspectState(props.state);
+	function clipbdCopy() {
+		window.navigator.clipboard.writeText(JSON.stringify(serializeUma(uma_GetCurrent())));
+		document.activeElement.blur();
+	}
+
+	async function clipbdPaste() {
+		const umaObj = await navigator.clipboard.readText().then(JSON.parse);
+		// do some basic validation; `deserializeUma()` will ensure we have all other fields, but check that we at least got
+		// something vaguely uma-shaped to avoid overwriting the uma in case the user pasted something completely unrelated
+		if (umaObj.hasOwnProperty('outfitId') && umaObj.hasOwnProperty('skills')) {
+			setUma(deserializeUma(umaObj));
+		}
+		document.activeElement.blur();
+	}
+
+	return (
+		<IntlProvider definition={STRINGS[lang]}>
+			<div class="horseDef">
+				<div class="horseDefHeader">{props.children}</div>
+				<div class="horseTopSection">
+					<UmaSelector outfitId={l_umaId} starCount={l_starCount} score={score} tabindex={tabnext()} />
+					<div class="horseTopButtonsRow">
+						{props.showSaveMngr !== false &&
+							<div class="pillBtn splitBtn btnType1">
+								<button onClick={() => setSaveMngrOpen(true)}>Save &amp; load</button>
+								<div aria-haspopup="menu" tabindex="-1">
+									<span>⌄</span>
+									<ul aria-role="menu">
+										<li><button onClick={clipbdCopy}>Copy to clipboard</button></li>
+										<li><button onClick={clipbdPaste}>Paste from clipboard</button></li>
+										{/*<li></li>
+										<li>Recent:</li>*/}
+									</ul>
+								</div>
+							</div>}
+						{props.showOcr !== false &&
+							<Localizer><button class="circleBtn btnType2" title={<Text id="ocrtip" />} onClick={setOcrOpen.bind(null, true)}>📷&#xFE0E;</button></Localizer>}
+					</div>
+					<div class={`horseSkillPickerOverlay ${ocrOpen || saveMngrOpen ? "open" : ""}`} onClick={() => {setOcrOpen(false); setSaveMngrOpen(false);}} />
+					{ocrOpen &&
+						<div class="horseSkillPickerWrapper open">
+							<HorseOcr isOpen={ocrOpen} onAccept={handleOcrAccept} onClose={setOcrOpen.bind(null, false)} />
+						</div>}
+					{saveMngrOpen &&
+						<div class="horseSkillPickerWrapper open">
+							<HorseSaveManager draft={uma_GetCurrent()} onLoad={handleMngrLoad} onClose={setSaveMngrOpen.bind(null, false)} />
+						</div>}
+				</div>
+				<div class="horseParams">
+					<div class="horseParamHeader"><img src="/uma-tools/icons/status_00.png" /><span><Text id="common.stat.1" /></span></div>
+					<div class="horseParamHeader"><img src="/uma-tools/icons/status_01.png" /><span><Text id="common.stat.2" /></span></div>
+					<div class="horseParamHeader"><img src="/uma-tools/icons/status_02.png" /><span><Text id="common.stat.3" /></span></div>
+					<div class="horseParamHeader"><img src="/uma-tools/icons/status_03.png" /><span><Text id="common.stat.4" /></span></div>
+					<div class="horseParamHeader"><img src="/uma-tools/icons/status_04.png" /><span><Text id="common.stat.5" /></span></div>
+					<Stat value={props.state.speed} tabindex={tabnext()} />
+					<Stat value={props.state.stamina} tabindex={tabnext()} />
+					<Stat value={props.state.power} tabindex={tabnext()} />
+					<Stat value={props.state.guts} tabindex={tabnext()} />
+					<Stat value={props.state.wisdom} tabindex={tabnext()} />
+				</div>
+				{getAptitudesSection()}
+				<div class="horseSkillHeader">{props.skillHeader || <Text id="skillheader" />}</div>
+				<div class="horseSkillListWrapper" onClick={handleSkillClick}>
+					<ul class="horseSkillList">
+						{skillList}
+						<li key="add">
+							<button class="skill addSkillButton" onClick={openSkillPicker} tabindex={tabnext()}>
+								<span>+</span><Text id="addskill" />
+							</button>
+						</li>
+					</ul>
+				</div>
+				<div class={`horseSkillPickerOverlay ${skillPickerOpen ? "open" : ""}`} onClick={setSkillPickerOpen.bind(null, false)} />
+				<div class={`horseSkillPickerWrapper ${skillPickerOpen ? "open" : ""}`}>
+					<SkillList ids={selectableSkills} selected={skills} setSelected={setSkillsAndClose} isOpen={skillPickerOpen} />
+				</div>
+			</div>
+		</IntlProvider>
+	);
+}, (prev, next) => prev.courseDistance == next.courseDistance && prev.children == next.children);

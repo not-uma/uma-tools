@@ -1,0 +1,96 @@
+diff --git a/RaceSolver.ts b/RaceSolver.ts
+index 9735f6a..d15e4dc 100644
+--- a/RaceSolver.ts
++++ b/RaceSolver.ts
+@@ -197,6 +197,7 @@ export class RaceSolver {
+ 	hp: HpPolicy
+ 	rng: PRNG
+ 	gorosiRng: PRNG
++	modifierScalingRng: PRNG
+ 	paceEffectRng: PRNG
+ 	hillRng: PRNG[]
+ 	timers: Timer[]
+@@ -272,6 +273,12 @@ export class RaceSolver {
+ 		this.usedSkills = new Set();
+ 		this.gorosiRng = new Rule30CARng(this.rng.int32());
+ 		this.paceEffectRng = new Rule30CARng(this.rng.int32());
++		// LOCAL PATCH: one long-lived rng dedicated to modifier scaling. Short-lived
++		// instances reseeded per skill come out measurably biased, and this rng is
++		// used for nothing else, so the two solvers in a comparison cannot desync
++		// through it even when they activate different skills.
++		this.modifierScalingRng = new Rule30CARng(this.rng.int32(), this.rng.int32());
++		for (let i = 0; i < 64; ++i) this.modifierScalingRng.int32();
+ 		this.timers = [];
+ 		this.accumulatetime = this.getNewTimer();
+ 		// bit of a hack because implementing post_number is surprisingly annoying, since we don't have RaceParameters.numUmas available here
+@@ -653,10 +660,51 @@ export class RaceSolver {
+ 		this.activateCountLastFrame = activateCountThisFrame;
+ 	}
+ 
++	// LOCAL PATCH. Mirrors the modifier-scaling table the upstream engine uses.
++	// A dedicated per-skill RNG keeps the two solvers in a comparison in sync:
++	// drawing from the shared rng here would desync them, because the two umas
++	// activate different numbers of skills.
++	getScalingRng(_skillId: string) {
++		return this.modifierScalingRng;
++	}
++
++	getScaledModifier(skillId: string, ef) {
++		const a = ef.modifier;
++		switch (ef.modifierScaling) {
++		case 1: return a;
++		case 2: case 3: case 4: case 5: case 6: case 7: return a * 1.2;
++		case 8: case 9: {
++			const i = this.getScalingRng(skillId).uniform(10);
++			return a * (i < 6 ? 0 : i < 9 ? 0.02 : 0.04);
++		}
++		case 10: return a * 1.2;
++		case 11: return a;
++		case 12: return a * 1.2;
++		case 13: return a;
++		case 14: {
++			// upstream keys this off a tag-group activation count we do not track;
++			// fall back to the base value rather than guessing.
++			return a;
++		}
++		case 19: return a + 0.1 * this.getScalingRng(skillId).uniform(2);
++		case 20: case 21: case 22: case 23: case 24: return a;
++		case 25: return a * [1, 1.4, 1.8][this.getScalingRng(skillId).uniform(3)];
++		case 26: case 28: case 32: return a * 1.2;
++		case 34: return a;
++		default: return a;
++		}
++	}
++
+ 	activateSkill(s: PendingSkill) {
+ 		// sort so that the ExtendEvolvedDuration effect always activates after other effects, since it shouldn't extend the duration of other
+ 		// effects on the same skill
+-		s.effects.sort((a,b) => +(a.type == 42) - +(b.type == 42)).forEach(ef => {
++		s.effects.sort((a,b) => +(a.type == 42) - +(b.type == 42)).forEach(ef_ => {
++			// LOCAL PATCH: several effects list a BASE modifier that has to be scaled
++			// before use. Most notably scaling 8 (Risky Business / Nothing Ventured),
++			// whose listed -100% stamina is really a base of 1 multiplied by a random
++			// 0 / 0.02 / 0.04. Without this the drain empties the whole HP bar.
++			const ef = ef_.modifierScaling == null || ef_.modifierScaling == 1 ? ef_
++				: Object.assign({}, ef_, {modifier: this.getScaledModifier(s.skillId, ef_)});
+ 			const scaledDuration = ef.baseDuration * (this.course.distance / 1000) *
+ 				(s.rarity == SkillRarity.Evolution ? this.modifiers.specialSkillDurationScaling : 1);  // TODO should probably be awakened skills
+ 				                                                                                       // and not just pinks
+diff --git a/RaceSolverBuilder.ts b/RaceSolverBuilder.ts
+index a92995e..b47fe87 100644
+--- a/RaceSolverBuilder.ts
++++ b/RaceSolverBuilder.ts
+@@ -248,7 +248,12 @@ function buildSkillEffects(skill, perspective: Perspective) {
+ 	return skill.effects.map(ef => ({
+ 		type: SkillType.hasOwnProperty(ef.type) && isTarget(perspective, ef.target) ? ef.type : SkillType.Noop,
+ 		baseDuration: skill.baseDuration / 10000,
+-		modifier: ef.modifier / 10000
++		modifier: ef.modifier / 10000,
++		// LOCAL PATCH: carry the per-effect scaling type through. Without it,
++		// effects whose listed modifier is only a BASE value (notably the
++		// stamina drain on Risky Business / Nothing Ventured, scaling 8) get
++		// applied at full strength.
++		modifierScaling: ef.scaling
+ 	}));
+ }
+ 

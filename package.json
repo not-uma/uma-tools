@@ -1,0 +1,27 @@
+{
+  "name": "uma-tools",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "author": "pecan",
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "commander": "^13.1.0",
+    "esbuild": "^0.19.5",
+    "fast-check": "^4.8.0",
+    "tape": "^5.9.0"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.2",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/jpn": "^1.0.0",
+    "d3": "^7.9.0",
+    "glpk.js": "^5.0.0",
+    "idb": "^8.0.3",
+    "posthog-js": "^1.257.0",
+    "preact": "^10.18.1",
+    "preact-i18n": "^2.4.0-preactx",
+    "tesseract.js": "^5.1.1"
+  }
+}

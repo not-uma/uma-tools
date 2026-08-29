@@ -1,0 +1,51 @@
+.distanceMarker, .slopePer {
+	font-weight: 600;
+	paint-order: stroke;
+	stroke: white;
+	stroke-width: 2px;
+}
+
+.sectionText {
+	dominant-baseline: central;
+	font-size: 12px;
+	font-weight: 600;
+	paint-order: stroke;
+	stroke: white;
+	stroke-width: 2px;
+	text-anchor: middle;
+}
+
+.racetrackHeader {
+	align-items: center;
+	display: flex;
+	height: 2em;
+	justify-content: flex-end;
+}
+
+.racetrackName {
+	color: rgb(121,64,22);
+	flex: 1;
+	font-size: 22px;
+	text-align: center;
+	text-stroke: 1px rgb(121,64,22);
+	-webkit-text-stroke: 1px rgb(121,64,22);
+	text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
+}
+
+.racetrackStatThresholds {
+	display: flex;
+	flex-direction: row-reverse;
+	width: 0;
+}
+
+.racetrackStatThresholds > img {
+	height: 2em;
+}
+
+.mouseoverText {
+	font-size: 12px;
+	font-weight: 600;
+	paint-order: stroke;
+	stroke: white;
+	stroke-width: 2px;
+}

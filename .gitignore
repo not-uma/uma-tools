@@ -1,0 +1,6 @@
+node_modules/
+uma-skill-tools/node_modules/
+uma-skill-tools/test/
+*.bak
+*.original.js
+*.patched.js
