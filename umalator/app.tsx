@@ -19,7 +19,7 @@ import { HorseDef, horseDefTabs, isGeneralSkill } from '../components/HorseDef';
 import { extendStrings, TRACKNAMES_ja, TRACKNAMES_en, COMMON_STRINGS } from '../strings/common';
 
 import { getActivateableSkills, getNullRow, BasinnChart } from './BasinnChart';
-import { UmaRankChart, getUmaEntries, getNullUmaRow, aptitudesForCourse, ALL_STRATEGIES, STRATEGY_LABELS, alreadyCovered } from './UmaRankChart';
+import { UmaRankChart, getUmaEntries, getNullUmaRow, aptitudesForCourse, ALL_STRATEGIES, STRATEGY_LABELS, alreadyCovered, stripOwnUnique } from './UmaRankChart';
 import { StaCalcResults } from './StaCalc';
 
 import { initTelemetry, postEvent } from './telemetry';
@@ -926,7 +926,7 @@ function Umalator(props) {
 	// score NEGATIVE. Drop them from the compared build instead.
 	function coveredAwakeningsFor(e) {
 		if (!includeUmaSkills) return [];
-		return e.awakenings.filter(id => alreadyCovered(id, uma1.skills));
+		return e.awakenings.filter(id => alreadyCovered(id, stripOwnUnique(uma1).skills));
 	}
 
 	function stopUmaRank() {
@@ -942,14 +942,15 @@ function Umalator(props) {
 		if (e == null) return;
 		if (umaDetail.key == key) { setUmaDetail({key: '', data: new Map()}); return; }
 		setUmaDetail({key, data: new Map()});
-		const base = includeUmaSkills ? {...uma1, strategy: e.strategy}
+		const detailUma = includeUmaSkills ? stripOwnUnique(uma1) : uma1;
+		const base = includeUmaSkills ? {...detailUma, strategy: e.strategy}
 			: {...uma1, strategy: e.strategy, skills: new Map(), samplePolicies: new Map()};
 		const params = racedefToParams(racedef, e.strategy);
 		const skills = getActivateableSkills(e.awakenings, base, course, params)
 			.filter(id => !alreadyCovered(id, base.skills));
 		setUmaDetail({key, data: new Map(), simulated: skills});
 		workers[0].postMessage({msg: 'umadetail', data: {
-			key, strategy: e.strategy, skills, course, racedef: params, uma: uma1,
+			key, strategy: e.strategy, skills, course, racedef: params, uma: detailUma,
 			options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills}
 		}});
 	}
@@ -957,6 +958,7 @@ function Umalator(props) {
 	function doUmaRank() {
 		postEvent('doUmaRank', {});
 		const active = umaEntries.filter(e => umaRankStyles.has(e.strategy));
+		const rankUma = includeUmaSkills ? stripOwnUnique(uma1) : uma1;
 		const filler = new Map();
 		active.forEach(e => filler.set(e.key, getNullUmaRow(e)));
 		setUmaRankData(filler);
@@ -968,7 +970,7 @@ function Umalator(props) {
 		// Prepare per-uma work items. Skills that cannot fire on this track are
 		// dropped up front so the workers do not waste samples on them.
 		const work = active.map(e => {
-			const base = includeUmaSkills ? {...uma1, strategy: e.strategy}
+			const base = includeUmaSkills ? {...rankUma, strategy: e.strategy}
 				: {...uma1, strategy: e.strategy, skills: new Map(), samplePolicies: new Map()};
 			const params = racedefToParams(racedef, e.strategy);
 			return {
@@ -977,7 +979,7 @@ function Umalator(props) {
 				racedef: params,
 				// only swap when the baseline genuinely carries the inherited version
 				replaceGroup: (includeUmaSkills && e.inheritedGroup != null
-					&& uma1.skills.has(e.inheritedGroup)) ? e.inheritedGroup : null,
+					&& rankUma.skills.has(e.inheritedGroup)) ? e.inheritedGroup : null,
 				uniqueSkills: getActivateableSkills([e.unique], base, course, params)
 					.filter(id => !alreadyCovered(id, base.skills)),
 				awakenSkills: getActivateableSkills(e.awakenings, base, course, params)
@@ -987,7 +989,7 @@ function Umalator(props) {
 		const nPer = Math.ceil(work.length / workers.length);
 		workers.reduce((rest, w) => {
 			w.postMessage({msg: 'umarank', data: {
-				entries: rest.slice(0, nPer), course, uma: uma1,
+				entries: rest.slice(0, nPer), course, uma: rankUma,
 				options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills}
 			}});
 			return rest.slice(nPer);
