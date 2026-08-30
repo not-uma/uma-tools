@@ -139,6 +139,10 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 	let ai = 1, bi = 0;
 	let sign = 1;
 	const diff = [];
+	// PERF: the per-step telemetry below is only ever read for the four runs kept
+	// in runData (min/max/mean/median). Callers that only want the numbers -- the
+	// skill table and uma ranking -- pass collectRunData: false and skip it.
+	const COLLECT = options.collectRunData !== false;
 	let min = Infinity, max = -Infinity, estMean, estMedian, bestMeanDiff = Infinity, bestMedianDiff = Infinity;
 	let minrun, maxrun, meanrun, medianrun;
 	let nspurt = [0,0];
@@ -151,28 +155,34 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 
 		while (s2.pos < course.distance) {
 			s2.step(1/15);
-			data.t[ai].push(s2.accumulatetime.t);
-			data.p[ai].push(s2.pos);
-			data.v[ai].push(s2.currentSpeed + (s2.modifiers.currentSpeed.acc + s2.modifiers.currentSpeed.err));
-			data.hp[ai].push((s2.hp as GameHpPolicy).hp);
+			if (COLLECT) {
+				data.t[ai].push(s2.accumulatetime.t);
+				data.p[ai].push(s2.pos);
+				data.v[ai].push(s2.currentSpeed + (s2.modifiers.currentSpeed.acc + s2.modifiers.currentSpeed.err));
+				data.hp[ai].push((s2.hp as GameHpPolicy).hp);
+			}
 		}
 		data.sdly[ai] = s2.startDelay;
 
 		while (s1.accumulatetime.t < s2.accumulatetime.t) {
 			s1.step(1/15);
-			data.t[bi].push(s1.accumulatetime.t);
-			data.p[bi].push(s1.pos);
-			data.v[bi].push(s1.currentSpeed + (s1.modifiers.currentSpeed.acc + s1.modifiers.currentSpeed.err));
-			data.hp[bi].push((s1.hp as GameHpPolicy).hp);
+			if (COLLECT) {
+				data.t[bi].push(s1.accumulatetime.t);
+				data.p[bi].push(s1.pos);
+				data.v[bi].push(s1.currentSpeed + (s1.modifiers.currentSpeed.acc + s1.modifiers.currentSpeed.err));
+				data.hp[bi].push((s1.hp as GameHpPolicy).hp);
+			}
 		}
 		// run the rest of the way to have data for the chart
 		const pos1 = s1.pos;
 		while (s1.pos < course.distance) {
 			s1.step(1/15);
-			data.t[bi].push(s1.accumulatetime.t);
-			data.p[bi].push(s1.pos);
-			data.v[bi].push(s1.currentSpeed + (s1.modifiers.currentSpeed.acc + s1.modifiers.currentSpeed.err));
-			data.hp[bi].push((s1.hp as GameHpPolicy).hp);
+			if (COLLECT) {
+				data.t[bi].push(s1.accumulatetime.t);
+				data.p[bi].push(s1.pos);
+				data.v[bi].push(s1.currentSpeed + (s1.modifiers.currentSpeed.acc + s1.modifiers.currentSpeed.err));
+				data.hp[bi].push((s1.hp as GameHpPolicy).hp);
+			}
 		}
 		data.sdly[bi] = s1.startDelay;
 

@@ -96,7 +96,8 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			const withSkill = {...base, skills: new Map(base.skills.entries())};
 			if (replaceGroup != null) withSkill.skills.delete(replaceGroup);
 			ids.forEach(id => withSkill.skills.set(skillmeta[id].groupId, id));
-			const {results, activations} = runComparison(nsamples, course, e.racedef, base, withSkill, seed, options);
+			const {results, activations} = runComparison(nsamples, course, e.racedef, base, withSkill, seed,
+				{...options, collectRunData: false});
 			const never = ids.filter(id => !(activations.get(id) > 0));
 			return {value: results.reduce((a,b) => a+b, 0) / results.length, never};
 		}
@@ -122,25 +123,31 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 
 function doUmaRank({entries, course, uma, options}) {
 	const seedgen = new Rule30CARng(options.seed);
-	[5, 30, 100].forEach(n => runUmaRound(n, entries, course, uma, seedgen.pair(), options));
+	// The 5-sample round is skipped -- its results are overwritten within a second
+	// and it cost ~4% of the run. Its seed pair still has to be consumed, though,
+	// or every later round shifts onto a different pair and the same seed stops
+	// reproducing the same numbers.
+	seedgen.pair();
+	[30, 100].forEach(n => runUmaRound(n, entries, course, uma, seedgen.pair(), options));
 	postMessage({type: 'umarankdone'});
 }
 
 function doUmaDetail({key, strategy, skills, course, racedef, uma, options}) {
 	const seedgen = new Rule30CARng(options.seed);
+	seedgen.pair();   // consume the dropped 5-sample round's pair, see doUmaRank
 	// must honour includeUmaSkills exactly like runUmaRound does, otherwise every
 	// expanded row is simulated against an empty baseline and skills gated on
 	// other skills activating can never fire.
 	const base = options.includeUmaSkills
 		? {...uma, strategy}
 		: {...uma, strategy, skills: new Map(), samplePolicies: new Map()};
-	[5, 30, 100].forEach(n => {
+	[30, 100].forEach(n => {
 		const seed = seedgen.pair();
 		const results = new Map();
 		skills.forEach(id => {
 			const withSkill = {...base, skills: new Map(base.skills.entries())};
 			withSkill.skills.set(skillmeta[id].groupId, id);
-			const r = runComparison(n, course, racedef, base, withSkill, seed, options);
+			const r = runComparison(n, course, racedef, base, withSkill, seed, {...options, collectRunData: false});
 			results.set(id, {
 				value: r.results.reduce((a,b) => a+b, 0) / r.results.length,
 				fired: r.activations.get(id) || 0,

@@ -769,7 +769,12 @@ function Umalator(props) {
 	}
 
 	const [workerGen, setWorkerGen] = useState(0);
-	const workers = [1,2,3,4].map(_ => useMemo(() => {
+	// PERF: this used to be hardcoded to 4 regardless of the machine. Leave one
+	// thread for the UI so the page stays responsive while a run is going.
+	const NWORKERS = useMemo(() => Math.max(2, Math.min(16, (navigator.hardwareConcurrency || 4) - 1)), []);
+	// One memo returning the whole pool: calling useMemo inside a map would break
+	// the rules of hooks if the pool size ever changed.
+	const workers = useMemo(() => Array.from({length: NWORKERS}, () => {
 		const w = new Worker('./simulator.worker.js');
 		w.addEventListener('message', function (e) {
 			const {type, results} = e.data;
@@ -799,7 +804,7 @@ function Umalator(props) {
 			}
 		});
 		return w;
-	}, [workerGen]));
+	}), [workerGen, NWORKERS]);
 	const workersRef = useRef([]);
 	workersRef.current = workers;
 
@@ -964,7 +969,7 @@ function Umalator(props) {
 		const filler = new Map();
 		active.forEach(e => filler.set(e.key, getNullUmaRow(e)));
 		setUmaRankData(filler);
-		setUmaRankProgress({done: 0, total: active.length * 3});   // three sampling rounds
+		setUmaRankProgress({done: 0, total: active.length * 2});   // two sampling rounds
 		setUmaRankRunning(true);
 		setUmaRankWorkersLeft(workers.length);
 		setLastUmaRankRun({uma: uma1, courseId, racedef});
