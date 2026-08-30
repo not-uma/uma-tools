@@ -59,22 +59,23 @@ function run1Round(nsamples: number, skills: string[], course: CourseData, raced
 
 function doChart({skills, course, racedef, uma, options}) {
 	const seedgen = new Rule30CARng(options.seed);
+	const NROUNDS = 5;
 	let results = run1Round(3, skills, course, racedef, uma, seedgen.pair(), options);
-	postMessage({type: 'chart', results});
+	postMessage({type: 'chart', results, progress: {done: 1, total: NROUNDS}});
 	let update = run1Round(17, skills, course, racedef, uma, seedgen.pair(), options);
 	mergeResultSets(results, update);
-	postMessage({type: 'chart', results});
+	postMessage({type: 'chart', results, progress: {done: 2, total: NROUNDS}});
 	skills = skills.filter(id => results.get(id).max > 0.1);
 	update = run1Round(30, skills, course, racedef, uma, seedgen.pair(), options);
 	mergeResultSets(results, update);
-	postMessage({type: 'chart', results});
+	postMessage({type: 'chart', results, progress: {done: 3, total: NROUNDS}});
 	skills = skills.filter(id => Math.abs(results.get(id).max - results.get(id).min) > 0.1);
 	update = run1Round(50, skills, course, racedef, uma, seedgen.pair(), options);
 	mergeResultSets(results, update);
-	postMessage({type: 'chart', results});
+	postMessage({type: 'chart', results, progress: {done: 4, total: NROUNDS}});
 	update = run1Round(100, skills, course, racedef, uma, seedgen.pair(), options);
 	mergeResultSets(results, update);
-	postMessage({type: 'chart', results});
+	postMessage({type: 'chart', results, progress: {done: NROUNDS, total: NROUNDS}, final: true});
 }
 
 function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseState, seed: [number,number], options) {
@@ -128,7 +129,11 @@ function doUmaRank({entries, course, uma, options}) {
 	// or every later round shifts onto a different pair and the same seed stops
 	// reproducing the same numbers.
 	seedgen.pair();
-	[30, 100].forEach(n => runUmaRound(n, entries, course, uma, seedgen.pair(), options));
+	const ROUNDS = [30, 100];
+	// report this worker's share so the bar total always matches what is actually
+	// run, however many workers the pool has and however many rounds we use
+	postMessage({type: 'umarankstart', total: entries.length * ROUNDS.length});
+	ROUNDS.forEach(n => runUmaRound(n, entries, course, uma, seedgen.pair(), options));
 	postMessage({type: 'umarankdone'});
 }
 
@@ -161,23 +166,31 @@ function doUmaDetail({key, strategy, skills, course, racedef, uma, options}) {
 function doCompare({nsamples, course, racedef, uma1, uma2, options}) {
 	const seedgen = new Rule30CARng(options.seed);
 	let results;
+	// count the warm-up rounds first so the progress bar has a real total
+	let nrounds = 1;
+	for (let n = Math.min(20, nsamples), mul = 6; n < nsamples; n = Math.min(n * mul, nsamples), mul = Math.max(mul - 1, 2)) ++nrounds;
+	let round = 0;
 	for (let n = Math.min(20, nsamples), mul = 6; n < nsamples; n = Math.min(n * mul, nsamples), mul = Math.max(mul - 1, 2)) {
 		results = runComparison(n, course, racedef, uma1, uma2, seedgen.pair(), options);
-		postMessage({type: 'compare', results});
+		postMessage({type: 'compare', results, progress: {done: ++round, total: nrounds}});
 	}
 	results = runComparison(nsamples, course, racedef, uma1, uma2, seedgen.pair(), options);
-	postMessage({type: 'compare', results});
+	postMessage({type: 'compare', results, progress: {done: nrounds, total: nrounds}, final: true});
 }
 
 function doHpCalc({nsamples, course, racedef, uma, debufUma, options}) {
 	const seedgen = new Rule30CARng(options.seed);
 	let results;
+	// count the warm-up rounds first so the progress bar has a real total
+	let nrounds = 1;
+	for (let n = Math.min(20, nsamples), mul = 6; n < nsamples; n = Math.min(n * mul, nsamples), mul = Math.max(mul - 1, 2)) ++nrounds;
+	let round = 0;
 	for (let n = Math.min(20, nsamples), mul = 6; n < nsamples; n = Math.min(n * mul, nsamples), mul = Math.max(mul - 1, 2)) {
 		results = runHpCalc(n, course, racedef, uma, debufUma, seedgen.pair(), options);
-		postMessage({type: 'hpcalc', results});
+		postMessage({type: 'hpcalc', results, progress: {done: ++round, total: nrounds}});
 	}
 	results = runHpCalc(nsamples, course, racedef, uma, debufUma, seedgen.pair(), options);
-	postMessage({type: 'hpcalc', results});
+	postMessage({type: 'hpcalc', results, progress: {done: nrounds, total: nrounds}, final: true});
 }
 
 self.addEventListener('message', function (e) {

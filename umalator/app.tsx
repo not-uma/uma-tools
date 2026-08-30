@@ -781,12 +781,20 @@ function Umalator(props) {
 			switch (type) {
 				case 'compare':
 					setCompareResults(results);
+					noteProgress(e.data);
 					break;
 				case 'hpcalc':
 					setStacalcResults(results);
+					noteProgress(e.data);
 					break;
 				case 'chart':
 					updateTableData(results);
+					noteProgress(e.data);
+					break;
+				case 'umarankstart':
+					// each worker reports its own share, so the total always matches the
+					// work actually queued no matter how many workers or rounds there are
+					setUmaRankProgress(p => ({...p, total: p.total + e.data.total}));
 					break;
 				case 'umarank':
 					updateUmaRankData(results);
@@ -794,7 +802,7 @@ function Umalator(props) {
 					break;
 				case 'umarankdone':
 					setUmaRankWorkersLeft(n => {
-						if (n <= 1) setUmaRankRunning(false);
+						if (n <= 1) finishRun();
 						return n - 1;
 					});
 					break;
@@ -859,6 +867,7 @@ function Umalator(props) {
 	Object.keys(skillnames).forEach(id => strings.skillnames[id] = skillnames[id][langid]);
 
 	function doComparison() {
+		beginRun();
 		postEvent('doComparison', {});
 		workers[0].postMessage({
 			msg: 'compare',
@@ -874,6 +883,7 @@ function Umalator(props) {
 	}
 
 	function doStaCalc() {
+		beginRun();
 		postEvent('doStaCalc', {});
 		workers[0].postMessage({
 			msg: 'hpcalc',
@@ -913,7 +923,27 @@ function Umalator(props) {
 	const [umaDetail, setUmaDetail] = useState({key: '', data: new Map()});
 	const [umaRankRunning, setUmaRankRunning] = useState(false);
 	const [umaRankWorkersLeft, setUmaRankWorkersLeft] = useState(0);
+	// shared by every mode: {done,total} drives the bar, elapsed shows the timing
 	const [umaRankProgress, setUmaRankProgress] = useState({done: 0, total: 0});
+	const [runElapsed, setRunElapsed] = useState(null);
+	const runStart = useRef(0);
+
+	function noteProgress(d) {
+		if (d.progress) setUmaRankProgress({done: d.progress.done, total: d.progress.total});
+		if (d.final) finishRun();
+	}
+
+	function beginRun() {
+		runStart.current = performance.now();
+		setRunElapsed(null);
+		setUmaRankProgress({done: 0, total: 0});
+		setUmaRankRunning(true);
+	}
+
+	function finishRun() {
+		setRunElapsed((performance.now() - runStart.current) / 1000);
+		setUmaRankRunning(false);
+	}
 	const [umaRankStyles, setUmaRankStyles] = useState(() => new Set(ALL_STRATEGIES));
 	const [includeUmaSkills, setIncludeUmaSkills] = useState(false);
 
@@ -934,7 +964,7 @@ function Umalator(props) {
 		return e.awakenings.filter(id => alreadyCovered(id, stripOwnUnique(uma1).skills));
 	}
 
-	function stopUmaRank() {
+	function stopRun() {
 		workersRef.current.forEach(w => w.terminate());
 		setWorkerGen(g => g + 1);   // useMemo dep -- rebuilds a fresh set of workers
 		setUmaRankRunning(false);
@@ -969,8 +999,7 @@ function Umalator(props) {
 		const filler = new Map();
 		active.forEach(e => filler.set(e.key, getNullUmaRow(e)));
 		setUmaRankData(filler);
-		setUmaRankProgress({done: 0, total: active.length * 2});   // two sampling rounds
-		setUmaRankRunning(true);
+		beginRun();   // total arrives from the workers via 'umarankstart'
 		setUmaRankWorkersLeft(workers.length);
 		setLastUmaRankRun({uma: uma1, courseId, racedef});
 		setUmaDetail({key: '', data: new Map()});
@@ -1004,6 +1033,7 @@ function Umalator(props) {
 	}
 
 	function doBasinnChart() {
+		beginRun();
 		postEvent('doBasinnChart', {});
 		const params = racedefToParams(racedef, uma1.strategy);
 		const skills = getActivateableSkills(chartMode != 'all' ? chartSkillsForMode(chartMode) : baseSkillsToTest.filter(id => {
@@ -1271,13 +1301,32 @@ function Umalator(props) {
 							<label for="showhp"><Text id="ui.sidebar.showhp" /></label>
 							<input type="checkbox" id="showhp" checked={showHp} onClick={toggleShowHp} />
 						</div>
+						{(umaRankRunning || runElapsed != null) &&
+							<div id="umaRankProgress">
+								<div id="umaRankProgressBar" class={umaRankProgress.total > 0 ? '' : 'indeterminate'}
+									style={{width: umaRankProgress.total > 0
+										? Math.min(100, 100 * umaRankProgress.done / umaRankProgress.total) + '%' : '100%'}} />
+								<span id="umaRankProgressText">
+									{umaRankRunning
+										? (umaRankProgress.total > 0
+											? Math.min(100, Math.floor(100 * umaRankProgress.done / umaRankProgress.total)) + '%'
+											: 'working\u2026')
+										: (runElapsed != null ? `Done in ${runElapsed.toFixed(1)}s` : '')}
+								</span>
+							</div>}
 						{
 							[
-								<button id="run" class="stdBtn btnType1" onClick={doComparison} tabindex={1}><Text id="ui.sidebar.run.compare" /></button>,
-								<button id="run" class="stdBtn btnType1" onClick={doBasinnChart} tabindex={1}><Text id="ui.sidebar.run.chart" /></button>,
-								<button id="run" class="stdBtn btnType1" onClick={doStaCalc} tabindex={1}><Text id="ui.sidebar.run.stacalc" /></button>,
 								<button id="run" class={`stdBtn ${umaRankRunning ? 'btnType2 umaRankStopBtn' : 'btnType1'}`}
-									onClick={umaRankRunning ? stopUmaRank : doUmaRank} tabindex={1}>
+									onClick={umaRankRunning ? stopRun : doComparison} tabindex={1}>
+									{umaRankRunning ? 'STOP' : <Text id="ui.sidebar.run.compare" />}</button>,
+								<button id="run" class={`stdBtn ${umaRankRunning ? 'btnType2 umaRankStopBtn' : 'btnType1'}`}
+									onClick={umaRankRunning ? stopRun : doBasinnChart} tabindex={1}>
+									{umaRankRunning ? 'STOP' : <Text id="ui.sidebar.run.chart" />}</button>,
+								<button id="run" class={`stdBtn ${umaRankRunning ? 'btnType2 umaRankStopBtn' : 'btnType1'}`}
+									onClick={umaRankRunning ? stopRun : doStaCalc} tabindex={1}>
+									{umaRankRunning ? 'STOP' : <Text id="ui.sidebar.run.stacalc" />}</button>,
+								<button id="run" class={`stdBtn ${umaRankRunning ? 'btnType2 umaRankStopBtn' : 'btnType1'}`}
+									onClick={umaRankRunning ? stopRun : doUmaRank} tabindex={1}>
 									{umaRankRunning ? 'STOP' : <Text id="ui.sidebar.run.umarank" />}</button>,
 							][mode]
 						}
@@ -1317,15 +1366,6 @@ function Umalator(props) {
 						{
 							mode == Mode.UmaRank &&
 								<div id="extendedOptionsRow">
-									{umaRankProgress.total > 0 &&
-										<div id="umaRankProgress">
-											<div id="umaRankProgressBar" style={{width: Math.min(100, 100 * umaRankProgress.done / umaRankProgress.total) + '%'}} />
-											<span id="umaRankProgressText">
-												{umaRankRunning
-													? Math.floor(100 * umaRankProgress.done / umaRankProgress.total) + '%'
-													: (umaRankProgress.done >= umaRankProgress.total ? 'Done' : 'Stopped')}
-											</span>
-										</div>}
 									<fieldset id="umaRankStyleSelect">
 										<legend>Running styles</legend>
 										{ALL_STRATEGIES.map(st =>

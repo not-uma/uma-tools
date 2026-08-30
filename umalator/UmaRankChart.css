@@ -266,3 +266,14 @@ table.umaRankChart tbody tr[data-umakey] {
 	vertical-align: middle;
 	cursor: help;
 }
+
+#umaRankProgressBar.indeterminate {
+	background: linear-gradient(90deg, #ddd 0%, #6fb1e8 40%, #4a90d9 60%, #ddd 100%);
+	background-size: 200% 100%;
+	animation: umaRankPulse 1.1s linear infinite;
+}
+
+@keyframes umaRankPulse {
+	from { background-position: 100% 0; }
+	to   { background-position: -100% 0; }
+}
