@@ -195,6 +195,9 @@ function doHpCalc({nsamples, course, racedef, uma, debufUma, options}) {
 
 self.addEventListener('message', function (e) {
 	const {msg, data} = e.data;
+	// Without this, a throw in here dies silently in the worker and the UI sits on
+	// "working..." forever with no clue why. Report it back instead.
+	try {
 	switch (msg) {
 		case 'chart':
 			doChart(data);
@@ -211,5 +214,9 @@ self.addEventListener('message', function (e) {
 		case 'hpcalc':
 			doHpCalc(data);
 			break;
+	}
+	} catch (err) {
+		postMessage({type: 'error', task: msg, message: (err && err.message) || String(err)});
+		throw err;   // still surface it in the console for debugging
 	}
 });

@@ -791,6 +791,11 @@ function Umalator(props) {
 					updateTableData(results);
 					noteProgress(e.data);
 					break;
+				case 'error':
+					setRunError(`${e.data.task} failed: ${e.data.message}`);
+					setUmaRankRunning(false);
+					setUmaRankWorkersLeft(0);
+					break;
 				case 'umarankstart':
 					// each worker reports its own share, so the total always matches the
 					// work actually queued no matter how many workers or rounds there are
@@ -926,6 +931,7 @@ function Umalator(props) {
 	// shared by every mode: {done,total} drives the bar, elapsed shows the timing
 	const [umaRankProgress, setUmaRankProgress] = useState({done: 0, total: 0});
 	const [runElapsed, setRunElapsed] = useState(null);
+	const [runError, setRunError] = useState(null);
 	const runStart = useRef(0);
 
 	function noteProgress(d) {
@@ -936,6 +942,7 @@ function Umalator(props) {
 	function beginRun() {
 		runStart.current = performance.now();
 		setRunElapsed(null);
+		setRunError(null);
 		setUmaRankProgress({done: 0, total: 0});
 		setUmaRankRunning(true);
 	}
@@ -1301,6 +1308,7 @@ function Umalator(props) {
 							<label for="showhp"><Text id="ui.sidebar.showhp" /></label>
 							<input type="checkbox" id="showhp" checked={showHp} onClick={toggleShowHp} />
 						</div>
+						{runError != null && <div id="umaRankError">{runError}</div>}
 						{(umaRankRunning || runElapsed != null) &&
 							<div id="umaRankProgress">
 								<div id="umaRankProgressBar" class={umaRankProgress.total > 0 ? '' : 'indeterminate'}

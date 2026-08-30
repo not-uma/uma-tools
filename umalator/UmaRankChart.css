@@ -277,3 +277,14 @@ table.umaRankChart tbody tr[data-umakey] {
 	from { background-position: 100% 0; }
 	to   { background-position: -100% 0; }
 }
+
+#umaRankError {
+	background: #fde8e8;
+	border: 1px solid #d9534f;
+	color: #a12622;
+	border-radius: 4px;
+	padding: 4px 6px;
+	margin-bottom: 6px;
+	font-size: 11px;
+	word-break: break-word;
+}
