@@ -34,7 +34,10 @@ class ForceFullSpurtHpPolicy {
 		}
 		this.wrapped.tick(state, dt);
 	}
-	remainingHp() { return this.wrapped.remainingHp(); }
+	// The public engine's HpPolicy interface uses hasRemainingHp()/hpRatioRemaining();
+	// remainingHp() was the newer name. Provide both so either engine works.
+	hasRemainingHp() { return this.wrapped.hasRemainingHp(); }
+	remainingHp() { return this.wrapped.hp; }
 	hpRatioRemaining() { return this.wrapped.hpRatioRemaining(); }
 	recover(modifier: number) { this.wrapped.recover(modifier); }
 
@@ -66,6 +69,7 @@ class CalcRequiredHpPolicy {
 		this.wrapped.hp = 0;
 	}
 	tick(state: RaceState, dt: number) { this.wrapped.tick(state, dt); }
+	hasRemainingHp() { return true; }   // this policy measures HP used; it never runs dry
 	remainingHp() { return this.wrapped.maxHp; }
 	hpRatioRemaining() { return 1.0; }
 	recover(modifier: number) { this.wrapped.recover(modifier); }
@@ -88,7 +92,7 @@ export function runHpCalc(nsamples: number, course: CourseData, racedef: RacePar
 		.season(racedef.season)
 		.time(racedef.time)
 		.horse(uma)
-		.otherHorse(debufUma);
+		.otherRawWisdom(debufUma.wisdom, debufUma.mood);
 	if (racedef.orderRange != null) {
 		b0
 			.order(racedef.orderRange[0], racedef.orderRange[1])
@@ -100,17 +104,17 @@ export function runHpCalc(nsamples: number, course: CourseData, racedef: RacePar
 	const uid = uniqueSkillForUma(uma.outfitId, uma.starCount);
 	Array.from(uma.skills.values()).forEach(id => {
 		wisdomSeeds.set(id, wisdomRng.pair());
-		b0.addSkill(id, Perspective.Self, id == uid ? uma.uniqueLv : 1, instantiateSamplePolicy(uma.samplePolicies.get(id)));
+		b0.addSkill(id, Perspective.Self, instantiateSamplePolicy(uma.samplePolicies.get(id)));
 	});
 	const did = uniqueSkillForUma(debufUma.outfitId, debufUma.starCount);
 	Array.from(debufUma.skills.values()).forEach(id => {
 		wisdomSeeds.set(id, wisdomRng.pair());
-		b0.addSkill(id, Perspective.Other, id == did ? debufUma.uniqueLv : 1, instantiateSamplePolicy(debufUma.samplePolicies.get(id)));
+		b0.addSkill(id, Perspective.Other, instantiateSamplePolicy(debufUma.samplePolicies.get(id)));
 	});
 	b0.withAsiwotameru();
 	if (!CC_GLOBAL) b0.withStaminaSyoubu();
 	if (options.usePosKeep) b0.useDefaultPacer();
-	if (options.useCompeteTop) b0.withItidoriarasoi();
+	/* withItidoriarasoi is not in the public engine */
 	if (options.useIntChecks) b0.withWisdomChecks(wisdomSeeds);
 	const b1 = b0
 		.fork()
