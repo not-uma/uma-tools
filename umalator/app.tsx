@@ -173,24 +173,30 @@ const enum EventType { CM, LOH }
 //  en: good yielding soft heavy
 // gbl: firm good     soft heavy
 const presets = (CC_GLOBAL ? [
-	{type: EventType.CM, name: 'Libra Cup 2', date: '2026-08-25', courseId: 10903, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Cloudy, time: Time.Midday},
-	{type: EventType.CM, name: 'Virgo Cup 2', date: '2026-08-05', courseId: 11103, season: Season.Autumn, ground: GroundCondition.Yielding, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Leo Cup 2', date: '2026-07-25', courseId: 10501, season: Season.Summer, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Cancer Cup 2', date: '2026-06-24', courseId: 10906, season: Season.Summer, ground: GroundCondition.Yielding, weather: Weather.Cloudy, time: Time.Midday},
-	{type: EventType.CM, name: 'Gemini Cup 2', date: '2026-06-04', courseId: 10602, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Taurus Cup 2', date: '2026-05-10', courseId: 10606, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Aries Cup', date: '2026-04-23', courseId: 10504, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Pisces Cup', date: '2026-03-30', courseId: 10914, season: Season.Spring, ground: GroundCondition.Heavy, weather: Weather.Rainy, time: Time.Midday},
-	{type: EventType.CM, name: 'Aquarius Cup', date: '2026-03-06', courseId: 10611, season: Season.Winter, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Capricorn Cup', date: '2026-02-13', courseId: 10701, season: Season.Winter, ground: GroundCondition.Soft, weather: Weather.Snowy, time: Time.Midday},
-	{type: EventType.CM, name: 'Sagittarius Cup', date: '2026-01-23', courseId: 10506, season: Season.Winter, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Scorpio Cup', date: '2026-01-01', courseId: 10604, season: Season.Autumn, ground: GroundCondition.Soft, weather: Weather.Rainy, time: Time.Midday},
-	{type: EventType.CM, name: 'Libra Cup', date: '2025-12-12', courseId: 10810, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Virgo Cup', date: '2025-11-20', courseId: 10903, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Leo Cup', date: '2025-10-30', courseId: 10906, season: Season.Summer, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Cancer Cup', date: '2025-10-07', courseId: 10602, season: Season.Summer, ground: GroundCondition.Yielding, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Gemini Cup', date: '2025-09-11', courseId: 10811, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
-	{type: EventType.CM, name: 'Taurus Cup', date: '2025-08-21', courseId: 10606, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday}
+	{type: EventType.CM, name: 'CM 24 - Aries Cup', date: '2027-01-01', courseId: 10811, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 23 - Pisces Cup', date: '2026-12-11', courseId: 10504, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 22 - Aquarius Cup', date: '2026-11-20', courseId: 10611, season: Season.Winter, ground: GroundCondition.Soft, weather: Weather.Snowy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 21 - Capricorn Cup', date: '2026-10-30', courseId: 10701, season: Season.Winter, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 20 - Sagittarius Cup', date: '2026-10-09', courseId: 10506, season: Season.Winter, ground: GroundCondition.Yielding, weather: Weather.Cloudy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 19 - Scorpio Cup', date: '2026-09-18', courseId: 10808, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 18 - Libra Cup', date: '2026-08-25', courseId: 10903, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Cloudy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 17 - Virgo Cup', date: '2026-08-05', courseId: 11103, season: Season.Autumn, ground: GroundCondition.Yielding, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 16 - Leo Cup', date: '2026-07-25', courseId: 10501, season: Season.Summer, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 15 - Cancer Cup', date: '2026-06-24', courseId: 10906, season: Season.Summer, ground: GroundCondition.Yielding, weather: Weather.Cloudy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 14 - Gemini Cup', date: '2026-06-04', courseId: 10602, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 13 - Taurus Cup', date: '2026-05-10', courseId: 10606, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 12 - Aries Cup', date: '2026-04-23', courseId: 10504, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 11 - Pisces Cup', date: '2026-03-30', courseId: 10914, season: Season.Spring, ground: GroundCondition.Heavy, weather: Weather.Rainy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 10 - Aquarius Cup', date: '2026-03-06', courseId: 10611, season: Season.Winter, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 9 - Capricorn Cup', date: '2026-02-13', courseId: 10701, season: Season.Winter, ground: GroundCondition.Soft, weather: Weather.Snowy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 8 - Sagittarius Cup', date: '2026-01-23', courseId: 10506, season: Season.Winter, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 7 - Scorpio Cup', date: '2026-01-01', courseId: 10604, season: Season.Autumn, ground: GroundCondition.Soft, weather: Weather.Rainy, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 6 - Libra Cup', date: '2025-12-12', courseId: 10810, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 5 - Virgo Cup', date: '2025-11-20', courseId: 10903, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 4 - Leo Cup', date: '2025-10-30', courseId: 10906, season: Season.Summer, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 3 - Cancer Cup', date: '2025-10-07', courseId: 10602, season: Season.Summer, ground: GroundCondition.Yielding, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 2 - Gemini Cup', date: '2025-09-11', courseId: 10811, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
+	{type: EventType.CM, name: 'CM 1 - Taurus Cup', date: '2025-08-21', courseId: 10606, season: Season.Spring, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday}
 ] : [
 	{type: EventType.CM, date: '2026-09-30' /* TODO date */, courseId: 10603, season: Season.Autumn, ground: GroundCondition.Good, weather: Weather.Sunny, time: Time.Midday},
 	{type: EventType.LOH, date: '2026-08-31' /* TODO date */, courseId: 10504, season: Season.Summer, time: Time.Midday},
@@ -633,6 +639,8 @@ function useRoute<T>(base: string, getRouteDesc: () => Record<string,T>, default
 	}, [routeDesc]);
 	return [current, navigate];
 }
+
+const SAVED_STATE_KEY = CC_GLOBAL ? 'umalator-global-session' : 'umalator-session';
 
 const enum Mode { Compare, Chart, StaCalc, UmaRank }
 
@@ -1439,9 +1447,45 @@ function App(props) {
 		}
 	}
 
+	// Remember the last session. Uses exactly the same encoding as the share links,
+	// so a saved session and a pasted link are interchangeable and version-skew is
+	// handled by the same defaulting logic in deserialize().
+	function restoreSaved() {
+		let saved = null;
+		try { saved = window.localStorage.getItem(SAVED_STATE_KEY); } catch (_) { return; }
+		if (!saved) return;
+		deserialize(saved).then(o => {
+			state.setState(Object.assign({}, state.ref.current.state, o));
+			setKey(k => !k);
+		}).catch(_ => {
+			try { window.localStorage.removeItem(SAVED_STATE_KEY); } catch (_) {}
+		});
+	}
+
 	useEffect(function () {
-		loadState();
+		// a link in the URL always wins over the remembered session
+		if (window.location.hash) loadState();
+		else restoreSaved();
 		window.addEventListener('hashchange', loadState);
+	}, []);
+
+	// Autosave. The state object only exposes {ref, setState} with no subscribe
+	// hook, so poll it and only pay the gzip cost when something actually changed.
+	useEffect(function () {
+		let last = '';
+		const iv = setInterval(function () {
+			const st = state.ref.current.state;
+			const fingerprint = JSON.stringify([
+				st.courseId, st.nsamples, st.seed, st.usePosKeep, st.useCompeteTop, st.useIntChecks,
+				st.racedef, serializeUma(st.uma1), serializeUma(st.uma2), serializeUma(st.debufUma)]);
+			if (fingerprint === last) return;
+			last = fingerprint;
+			serialize(st.courseId, st.nsamples, st.seed, st.usePosKeep, st.useCompeteTop, st.useIntChecks,
+				st.racedef, st.hintLevels, st.uma1, st.uma2, st.debufUma, null, null)
+				.then(enc => { try { window.localStorage.setItem(SAVED_STATE_KEY, enc); } catch (_) {} })
+				.catch(_ => {});
+		}, 1500) as unknown as number;
+		return () => clearInterval(iv);
 	}, []);
 
 	return (
