@@ -359,16 +359,16 @@ export function UmaRankChart(props) {
 				{r.healTrigger &&
 					<span class="rankTriggerBadge"
 						title={`This unique only fires once several recovery skills have gone off.\n\n`
-							+ `Last recovery: ${r.healTrigger}`
-							+ (r.healBackups > 0
-								? ` (plus ${r.healBackups} other late recover${r.healBackups > 1 ? 'ies' : 'y'})`
-								: ` (no backup)`)
-							+ `\n\nChance shown is that enough of the recovery skills pass their wit checks: `
-							+ (r.healBackups > 0
-								? `3 out of 4, since the extra late recovery gives one spare.`
-								: `3 out of 3, with no spare.`)
+							+ (r.healTriggers || []).map((t, i) =>
+								`${i === 0 ? 'Best trigger' : 'Backup'}: ${t.name} \u2014 ${t.value.toFixed(2)} L`).join('\n')
+							+ ((r.healTriggers && r.healTriggers.length > 1)
+								? `\n\nIf the backup carries it instead of the best one you lose about `
+									+ `${(r.healTriggers[0].value - r.healTriggers[r.healTriggers.length-1].value).toFixed(2)} L.`
+								: `\n\nNo backup: if this one fails its wit check the unique does not fire at all.`)
+							+ `\n\nChance shown is that enough recovery skills pass their wit checks: `
+							+ (r.healBackups > 0 ? `3 of 4, the spare late recovery covering one failure.` : `3 of 3, no spare.`)
 							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
-						via {r.healTrigger}{r.healBackups > 0 ? ` +${r.healBackups}` : ''} · {Math.round(r.healFireRate * 100)}%</span>}
+						via {(r.healTriggers || [{name: r.healTrigger}]).map(t => t.name).join(' / ')} \u00b7 {Math.round(r.healFireRate * 100)}%</span>}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
 				{r.replacesInherited &&

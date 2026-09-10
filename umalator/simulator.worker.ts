@@ -167,10 +167,17 @@ function gainWithHealTrigger(nsamples, course, e, base, ids, replaceGroup, seed,
 	}
 	chance = Math.min(chance, 1);
 
+	// Report every trigger in the squad with the value it gives on its own, so the
+	// UI can show what happens when the backup carries it instead of the primary.
+	const byName = new Map(solo.map(x => [x.c.name, x.value]));
+	const triggers = squad.map(c => ({name: c.name, value: byName.get(c.name)}));
+	triggers.sort((a,b) => b.value - a.value);
+
 	return {
 		value: final.value,
 		trigger: best.c.name,
 		backups: k - 1,
+		triggers,
 		fireRate: chance,
 		perSkill: p,
 		fired: final.fireRate > 0
@@ -207,7 +214,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			return {value: results.reduce((a,b) => a+b, 0) / results.length, never};
 		}
 		const healNeed = options.forceSkillConditions ? healRequirement(e.uniqueSkills) : 0;
-		let u, healTrigger = null, healBackups = 0, healFireRate = 0, healPerSkill = 0;
+		let u, healTrigger = null, healBackups = 0, healFireRate = 0, healPerSkill = 0, healTriggers = null;
 		if (healNeed > 0) {
 			const best = gainWithHealTrigger(nsamples, course, e, base, e.uniqueSkills, e.replaceGroup, seed, options, healNeed);
 			if (best != null) {
@@ -216,6 +223,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 				healBackups = best.backups;
 				healFireRate = best.fireRate;
 				healPerSkill = best.perSkill;
+				healTriggers = best.triggers;
 			}
 			else u = {value: 0, never: e.uniqueSkills};   // no reliable trigger for this style
 		} else {
@@ -233,6 +241,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			healBackups,
 			healFireRate,
 			healPerSkill,
+			healTriggers,
 			awakenNeverFired: a.never.length,
 			awakenSimulated: e.awakenSkills.length,
 			pending: false
