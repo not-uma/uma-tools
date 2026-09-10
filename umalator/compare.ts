@@ -85,6 +85,7 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 	const compare = standard.fork();
 	standard.horse(uma1).otherRawWisdom(uma2.wisdom, uma2.mood);
 	if (options.forceSkillConditions) { standard.forceActivateCounts(); compare.forceActivateCounts(); }
+	if (options.forceMaxStacks) { standard.forceMaxStacks(); compare.forceMaxStacks(); }
 	compare.horse(uma2).otherRawWisdom(uma1.wisdom, uma1.mood);
 	const wisdomSeeds = new Map<string, [number,number]>();
 	const wisdomRng = new Rule30CARng(...seed);

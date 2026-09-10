@@ -962,6 +962,7 @@ function Umalator(props) {
 	const [umaRankStyles, setUmaRankStyles] = useState(() => new Set(ALL_STRATEGIES));
 	const [includeUmaSkills, setIncludeUmaSkills] = useState(false);
 	const [forceSkillConditions, setForceSkillConditions] = useState(false);
+	const [forceMaxStacks, setForceMaxStacks] = useState(false);
 
 	function toggleUmaRankStyle(strategy) {
 		setUmaRankStyles(cur => {
@@ -1002,7 +1003,7 @@ function Umalator(props) {
 		setUmaDetail({key, data: new Map(), simulated: skills});
 		workers[0].postMessage({msg: 'umadetail', data: {
 			key, strategy: e.strategy, skills, course, racedef: params, uma: detailUma,
-			options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions}
+			options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions, forceMaxStacks}
 		}});
 	}
 
@@ -1042,7 +1043,7 @@ function Umalator(props) {
 		workers.reduce((rest, w) => {
 			w.postMessage({msg: 'umarank', data: {
 				entries: rest.slice(0, nPer), course, uma: rankUma,
-				options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions}
+				options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions, forceMaxStacks}
 			}});
 			return rest.slice(nPer);
 		}, work);
@@ -1401,6 +1402,11 @@ function Umalator(props) {
 										<input type="checkbox" id="umaRankForceConditions" checked={forceSkillConditions}
 											onClick={() => setForceSkillConditions(v => !v)} />
 										<label for="umaRankForceConditions" title="Treats skills that require other skills to have activated first (Tail Held High, Groundwork, Lightning Flare, etc) as if that requirement is already met. Corner and straight conditions are unaffected.">Force skill count conditions</label>
+									</div>
+									<div class="umaRankToggle">
+										<input type="checkbox" id="umaRankMaxStacks" checked={forceMaxStacks}
+											onClick={() => setForceMaxStacks(v => !v)} />
+										<label for="umaRankMaxStacks" title="Skills that gain extra effect each time another skill activates while they are running (Lightning Flare, Luck Runs My Way, etc) get the maximum number of stacks immediately.">Max stacks from other skills</label>
 									</div>
 								</div>
 						}

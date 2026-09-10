@@ -59,6 +59,10 @@ function baseAccel(baseAccel: number, horse: HorseParameters, phase: Phase) {
 	  Acceleration.DistanceProficiencyModifier[horse.distanceAptitude];
 }
 
+// Repeat-effect stack cap. Confirmed 2 for Lightning Flare; the other three
+// skills using this pattern are assumed to match.
+const STACK_LIMIT = 2;
+
 const PhaseDeceleration = [-1.2, -0.8, -1.0];
 
 namespace PositionKeep {
@@ -226,6 +230,8 @@ export class RaceSolver {
 	activateCountHeal: number
 	activateCountLastFrame: number
 	forcedActivationFloor: number
+	stackingEffects: {entry: any, increment: number, remaining: number, arr: any[], mods: any, justCreated: boolean}[]
+	forceMaxStacks: boolean
 	onSkillActivate: (s: RaceSolver, skillId: string, perspective: Perspective) => void
 	onSkillDeactivate: (s: RaceSolver, skillId: string, perspective: Perspective) => void
 	sectionLength: number
@@ -263,7 +269,8 @@ export class RaceSolver {
 		pacer?: RaceSolver,
 		onSkillActivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
 		onSkillDeactivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
-		forceActivateCounts?: boolean
+		forceActivateCounts?: boolean,
+		forceMaxStacks?: boolean
 	}) {
 		// clone since green skills may modify the stat values
 		this.horse = Object.assign({}, params.horse);
@@ -310,6 +317,8 @@ export class RaceSolver {
 		// is_activate_any_skill checks whether something fired THIS frame, so the
 		// cumulative counters above don't cover it. Hold a floor of 1 instead.
 		this.forcedActivationFloor = params.forceActivateCounts ? 1 : 0;
+		this.stackingEffects = [];
+		this.forceMaxStacks = !!params.forceMaxStacks;
 		this.activateCountLastFrame = 0;
 		this.onSkillActivate = params.onSkillActivate || noop;
 		this.onSkillDeactivate = params.onSkillDeactivate || noop;
@@ -682,6 +691,52 @@ export class RaceSolver {
 		}
 		this.minPendingStart = newMinStart;
 		this.activateCountLastFrame = Math.max(activateCountThisFrame, this.forcedActivationFloor);
+		if (this.stackingEffects.length > 0) this.applyStacks(activateCountThisFrame);
+	}
+
+	// LOCAL PATCH: stacking effects.
+	// A few skills list the same effect type twice, e.g. Lightning Flare has
+	// TargetSpeed 2500 and TargetSpeed 250. The second one is not a second flat
+	// bonus -- it is an increment applied each time ANOTHER skill activates while
+	// the effect is running, up to STACK_LIMIT times. Applying both up front (the
+	// old behaviour) over-rates the skill when nothing else fires and under-rates
+	// it when the window is busy.
+	// The first effect of a given type on a skill is the base value. A repeat of
+	// that type is a per-activation increment, so it starts at zero and grows.
+	pushEffect(mods, arr, s, ef, scaledDuration: number, seenTypes: Set<number>) {
+		const isStack = seenTypes.has(ef.type);
+		seenTypes.add(ef.type);
+		if (!isStack) {
+			mods.add(ef.modifier);
+			arr.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
+			return;
+		}
+		const start = this.forceMaxStacks ? ef.modifier * STACK_LIMIT : 0;
+		const entry = {skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: start};
+		if (start != 0) mods.add(start);
+		arr.push(entry);
+		if (!this.forceMaxStacks) {
+			this.stackingEffects.push({entry, increment: ef.modifier, remaining: STACK_LIMIT, arr, mods, justCreated: true});
+		}
+	}
+
+	applyStacks(activatedThisFrame: number) {
+		if (activatedThisFrame <= 0) return;
+		for (let i = this.stackingEffects.length; --i >= 0;) {
+			const st = this.stackingEffects[i];
+			// drop it once the underlying effect has expired
+			if (st.arr.indexOf(st.entry) == -1) { this.stackingEffects.splice(i,1); continue; }
+			// On the frame the skill itself activates, its own activation is part of
+			// activatedThisFrame -- it must not stack off itself.
+			const available = activatedThisFrame - (st.justCreated ? 1 : 0);
+			st.justCreated = false;
+			const n = Math.min(st.remaining, available);
+			if (n <= 0) continue;
+			st.remaining -= n;
+			const add = st.increment * n;
+			st.entry.modifier += add;   // keeps expiry subtracting the right total
+			st.mods.add(add);
+		}
 	}
 
 	// LOCAL PATCH. Mirrors the modifier-scaling table the upstream engine uses.
@@ -722,6 +777,7 @@ export class RaceSolver {
 	activateSkill(s: PendingSkill) {
 		// sort so that the ExtendEvolvedDuration effect always activates after other effects, since it shouldn't extend the duration of other
 		// effects on the same skill
+		const seenTypes = new Set<number>();
 		s.effects.sort((a,b) => +(a.type == 42) - +(b.type == 42)).forEach(ef_ => {
 			// LOCAL PATCH: several effects list a BASE modifier that has to be scaled
 			// before use. Most notably scaling 8 (Risky Business / Nothing Ventured),
@@ -761,15 +817,13 @@ export class RaceSolver {
 				this.startDelay = ef.modifier;
 				break;
 			case SkillType.TargetSpeed:
-				this.modifiers.targetSpeed.add(ef.modifier);
-				this.activeTargetSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
+				this.pushEffect(this.modifiers.targetSpeed, this.activeTargetSpeedSkills, s, ef, scaledDuration, seenTypes);
 				break;
 			case SkillType.ModifyKakariChance:
 				this.modifiers.kakariChance += ef.modifier / 100.0;
 				break;
 			case SkillType.Accel:
-				this.modifiers.accel.add(ef.modifier);
-				this.activeAccelSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
+				this.pushEffect(this.modifiers.accel, this.activeAccelSkills, s, ef, scaledDuration, seenTypes);
 				break;
 			case SkillType.CurrentSpeed:
 			case SkillType.CurrentSpeedWithNaturalDeceleration:
