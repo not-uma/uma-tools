@@ -6,6 +6,7 @@ import { HorseState } from '../components/HorseDefTypes';
 import { runComparison } from './compare';
 import { runHpCalc } from './hpcalc';
 
+import { buildBaseStats } from '../uma-skill-tools/RaceSolverBuilder';
 import skillmeta from '../skill_meta.json';
 import skilldata from '../uma-skill-tools/data/skill_data.json';
 
@@ -146,11 +147,23 @@ function gainWithHealTrigger(nsamples, course, e, base, ids, replaceGroup, seed,
 	// 3. re-run the squad with wit checks on, so each trigger independently rolls
 	//    max(1 - 90/wisdom, 0.2). Two late triggers cover each other's failures.
 	const final = measure(squad, true, nsamples);
+
+	// Reported chance covers the WHOLE requirement, not just the last skill. The
+	// earlier need-1 recoveries are assumed to be ordinary skills whose only
+	// obstacle is their own wit check, and the last one succeeds if ANY of the
+	// late candidates passes:
+	//     p^(need-1) * (1 - (1-p)^k)
+	const stats = buildBaseStats({...base, strategy: e.strategy} as any, base.mood != null ? base.mood : 2);
+	const p = Math.max(1 - 90 / stats.wisdom, 0.2);
+	const k = squad.length;
+	const chance = Math.pow(p, Math.max(need - 1, 0)) * (1 - Math.pow(1 - p, k));
+
 	return {
 		value: final.value,
 		trigger: best.c.name,
-		backups: squad.length - 1,
-		fireRate: final.fireRate,
+		backups: k - 1,
+		fireRate: chance,
+		perSkill: p,
 		fired: final.fireRate > 0
 	};
 }
@@ -185,7 +198,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			return {value: results.reduce((a,b) => a+b, 0) / results.length, never};
 		}
 		const healNeed = options.forceSkillConditions ? healRequirement(e.uniqueSkills) : 0;
-		let u, healTrigger = null, healBackups = 0, healFireRate = 0;
+		let u, healTrigger = null, healBackups = 0, healFireRate = 0, healPerSkill = 0;
 		if (healNeed > 0) {
 			const best = gainWithHealTrigger(nsamples, course, e, base, e.uniqueSkills, e.replaceGroup, seed, options, healNeed);
 			if (best != null) {
@@ -193,6 +206,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 				healTrigger = best.trigger;
 				healBackups = best.backups;
 				healFireRate = best.fireRate;
+				healPerSkill = best.perSkill;
 			}
 			else u = {value: 0, never: e.uniqueSkills};   // no reliable trigger for this style
 		} else {
@@ -209,6 +223,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			healTrigger,
 			healBackups,
 			healFireRate,
+			healPerSkill,
 			awakenNeverFired: a.never.length,
 			awakenSimulated: e.awakenSkills.length,
 			pending: false

@@ -358,10 +358,13 @@ export function UmaRankChart(props) {
 				{formatValue(info)}
 				{r.healTrigger &&
 					<span class="rankTriggerBadge"
-						title={`This unique needs several recovery skills to have activated first. The value assumes the earlier ones happened and that a reliable late skill supplied the last one.\n\n`
-							+ `Primary trigger: ${r.healTrigger}`
-							+ (r.healBackups > 0 ? `\n${r.healBackups} backup trigger${r.healBackups > 1 ? 's' : ''} also equipped, so a failed wit check on one is covered by another.` : '\nNo backup: if this fails its wit check the unique does not fire.')
-							+ `\n\nUnique actually fired in ${Math.round(r.healFireRate * 100)}% of runs.`}>
+						title={`This unique only fires once several recovery skills have gone off.\n\n`
+							+ `Last recovery: ${r.healTrigger}`
+							+ (r.healBackups > 0
+								? ` (plus ${r.healBackups} other late recover${r.healBackups > 1 ? 'ies' : 'y'}, so only one of them has to pass its wit check)`
+								: ` (no backup, so it has to pass its own wit check)`)
+							+ `\n\nChance shown is the whole chain: the earlier recoveries passing their wit checks, then at least one late recovery passing.`
+							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
 						via {r.healTrigger}{r.healBackups > 0 ? ` +${r.healBackups}` : ''} · {Math.round(r.healFireRate * 100)}%</span>}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
