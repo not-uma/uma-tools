@@ -230,6 +230,7 @@ export class RaceSolver {
 	activateCountHeal: number
 	activateCountLastFrame: number
 	forcedActivationFloor: number
+	forceActivateCounts: boolean
 	stackingEffects: {entry: any, increment: number, remaining: number, arr: any[], mods: any, justCreated: boolean}[]
 	forceMaxStacks: boolean
 	onSkillActivate: (s: RaceSolver, skillId: string, perspective: Perspective) => void
@@ -311,9 +312,13 @@ export class RaceSolver {
 		// activate_count_middle>=3 or activate_count_heal>=3 hold from the start.
 		// Only these counters are affected -- corner/straight/phase conditions come
 		// from course geometry and are untouched.
-		const forced = params.forceActivateCounts ? 99 : 0;
-		this.activateCount = [forced, forced, forced];
-		this.activateCountHeal = forced;
+		// Seeding all three phases at once would let activate_count_middle>=N hold
+		// during the start dash, so the skill fires at 0m instead of mid-race. The
+		// counter for a phase is only raised once the race actually reaches it --
+		// see the top of processSkillActivations.
+		this.forceActivateCounts = !!params.forceActivateCounts;
+		this.activateCount = [0, 0, 0];
+		this.activateCountHeal = params.forceActivateCounts ? 99 : 0;
 		// is_activate_any_skill checks whether something fired THIS frame, so the
 		// cumulative counters above don't cover it. Hold a floor of 1 instead.
 		this.forcedActivationFloor = params.forceActivateCounts ? 1 : 0;
@@ -634,6 +639,10 @@ export class RaceSolver {
 	}
 
 	processSkillActivations() {
+		// raise the forced counters only for phases the race has actually entered
+		if (this.forceActivateCounts) {
+			for (let i = 0; i <= this.phase && i < 3; ++i) this.activateCount[i] = 99;
+		}
 		for (let i = this.activeTargetSpeedSkills.length; --i >= 0;) {
 			const s = this.activeTargetSpeedSkills[i];
 			if (s.durationTimer.t >= 0) {
