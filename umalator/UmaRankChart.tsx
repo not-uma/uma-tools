@@ -356,19 +356,31 @@ export function UmaRankChart(props) {
 			const r = info.row.original;
 			return <span>
 				{formatValue(info)}
-				{r.healTrigger &&
-					<span class="rankTriggerBadge"
+				{r.healTrigger && (() => {
+					// healTriggers arrives from the worker. If the worker bundle is older than
+					// the UI it will be missing, so fall back to healBackups for the count and
+					// say plainly that the per-trigger numbers need a rebuild.
+					const list = r.healTriggers || null;
+					const nBackup = list ? list.length - 1 : (r.healBackups || 0);
+					const names = list ? list.map(t => t.name).join(' / ') : r.healTrigger;
+					const detail = list
+						? list.map((t, i) => `${i === 0 ? 'Best trigger' : 'Backup'}: ${t.name} \u2014 ${t.value.toFixed(2)} L`).join('\n')
+						: `Best trigger: ${r.healTrigger}`
+							+ (nBackup > 0 ? `\n${nBackup} backup also equipped (rebuild the worker to see its value)` : '');
+					const spare = nBackup > 0
+						? (list
+							? `\n\nIf the backup carries it instead of the best one you lose about ${(list[0].value - list[list.length-1].value).toFixed(2)} L.`
+							: `\n\nA backup late recovery is equipped, so one failure is covered.`)
+						: `\n\nNo backup: if this one fails its wit check the unique does not fire at all.`;
+					const need = 3, total = need - 1 + nBackup + 1;
+					return <span class="rankTriggerBadge"
 						title={`This unique only fires once several recovery skills have gone off.\n\n`
-							+ (r.healTriggers || []).map((t, i) =>
-								`${i === 0 ? 'Best trigger' : 'Backup'}: ${t.name} \u2014 ${t.value.toFixed(2)} L`).join('\n')
-							+ ((r.healTriggers && r.healTriggers.length > 1)
-								? `\n\nIf the backup carries it instead of the best one you lose about `
-									+ `${(r.healTriggers[0].value - r.healTriggers[r.healTriggers.length-1].value).toFixed(2)} L.`
-								: `\n\nNo backup: if this one fails its wit check the unique does not fire at all.`)
-							+ `\n\nChance shown is that enough recovery skills pass their wit checks: `
-							+ (r.healBackups > 0 ? `3 of 4, the spare late recovery covering one failure.` : `3 of 3, no spare.`)
+							+ detail + spare
+							+ `\n\nChance shown is that enough recovery skills pass their wit checks: ${need} of ${total}`
+							+ (nBackup > 0 ? `, the spare late recovery covering one failure.` : `, no spare.`)
 							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
-						via {(r.healTriggers || [{name: r.healTrigger}]).map(t => t.name).join(' / ')} · {Math.round(r.healFireRate * 100)}%</span>}
+						via {names} · {Math.round(r.healFireRate * 100)}%</span>;
+				})()}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
 				{r.replacesInherited &&
