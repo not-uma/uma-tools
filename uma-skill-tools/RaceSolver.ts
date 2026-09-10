@@ -271,7 +271,8 @@ export class RaceSolver {
 		onSkillActivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
 		onSkillDeactivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
 		forceActivateCounts?: boolean,
-		forceMaxStacks?: boolean
+		forceMaxStacks?: boolean,
+		healSeed?: number
 	}) {
 		// clone since green skills may modify the stat values
 		this.horse = Object.assign({}, params.horse);
@@ -318,7 +319,10 @@ export class RaceSolver {
 		// see the top of processSkillActivations.
 		this.forceActivateCounts = !!params.forceActivateCounts;
 		this.activateCount = [0, 0, 0];
-		this.activateCountHeal = params.forceActivateCounts ? 99 : 0;
+		// healSeed lets the caller say "assume N-1 recovery skills already fired", so a
+		// single chosen trigger skill supplies the last one at a realistic position.
+		this.activateCountHeal = params.healSeed != null ? params.healSeed
+			: (params.forceActivateCounts ? 99 : 0);
 		// is_activate_any_skill checks whether something fired THIS frame, so the
 		// cumulative counters above don't cover it. Hold a floor of 1 instead.
 		this.forcedActivationFloor = params.forceActivateCounts ? 1 : 0;

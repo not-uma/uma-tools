@@ -7,6 +7,7 @@ import { runComparison } from './compare';
 import { runHpCalc } from './hpcalc';
 
 import skillmeta from '../skill_meta.json';
+import skilldata from '../uma-skill-tools/data/skill_data.json';
 
 function mergeResults(results1, results2) {
 	console.assert(results1.id == results2.id, `mergeResults: ${results1.id} != ${results2.id}`);
@@ -78,6 +79,56 @@ function doChart({skills, course, racedef, uma, options}) {
 	postMessage({type: 'chart', results, progress: {done: NROUNDS, total: NROUNDS}, final: true});
 }
 
+// Recovery skills that fire on a fully deterministic condition -- no random roll,
+// no field position, no lane. Anything else can't be relied on as "the last heal".
+// null style = usable by anyone.
+const HEAL_TRIGGERS = [
+	{id: '201571', name: 'Triple 7s', strategy: null},
+	{id: '200381', name: 'Breath of Fresh Air', strategy: null},
+	{id: '201281', name: 'Restless', strategy: 'Nige'},
+	{id: '201481', name: 'Go-Home Specialist', strategy: 'Oikomi'},
+	// Order-gated, but the engine resolves order statically against the order range,
+	// so these either always fire or never fire -- no per-run coin flip. Their exact
+	// position varies inside the corner region, which is how the skill really behaves.
+	{id: '900321', name: 'U=ma2 (inherited)', strategy: null},
+	{id: '900621', name: 'Go, Go, Mun! (inherited)', strategy: null}
+];
+
+// A skill gated on activate_count_heal>=N only fires once the Nth recovery lands.
+// Rather than pretending all N are free, assume N-1 happened (players do stack
+// unreliable heals) and let one reliable skill supply the last one, at its real
+// position. Try each candidate and keep whichever gives the best result.
+function healRequirement(ids: string[]) {
+	for (const id of ids) {
+		const sk = skilldata[id];
+		if (sk == null) continue;
+		for (const alt of sk.alternatives) {
+			const m = ((alt.precondition || '') + '&' + alt.condition).match(/activate_count_heal>=(\d+)/);
+			if (m) return +m[1];
+		}
+	}
+	return 0;
+}
+
+function gainWithHealTrigger(nsamples, course, e, base, ids, replaceGroup, seed, options, need) {
+	let best = null;
+	for (const cand of HEAL_TRIGGERS) {
+		if (cand.strategy != null && cand.strategy != e.strategy) continue;
+		if (!(cand.id in skillmeta)) continue;
+		const b2 = {...base, skills: new Map(base.skills.entries())};
+		b2.skills.set(skillmeta[cand.id].groupId, cand.id);
+		const withSkill = {...b2, skills: new Map(b2.skills.entries())};
+		if (replaceGroup != null) withSkill.skills.delete(replaceGroup);
+		ids.forEach(id => { const meta = skillmeta[id]; if (meta) withSkill.skills.set(meta.groupId, id); });
+		const o = {...options, collectRunData: false, healSeed: Math.max(need - 1, 0), forceSkillConditions: false};
+		const r = runComparison(nsamples, course, e.racedef, b2, withSkill, seed, o);
+		const value = r.results.reduce((a,b) => a+b, 0) / r.results.length;
+		const fired = ids.every(id => r.activations.get(id) > 0);
+		if (best == null || value > best.value) best = {value, trigger: cand.name, fired};
+	}
+	return best;
+}
+
 function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseState, seed: [number,number], options) {
 	// Results are posted in small chunks so the UI can show progress and fill in
 	// the table as it goes rather than freezing until the whole round finishes.
@@ -107,7 +158,15 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			const never = ids.filter(id => !(activations.get(id) > 0));
 			return {value: results.reduce((a,b) => a+b, 0) / results.length, never};
 		}
-		const u = gain(e.uniqueSkills, e.replaceGroup);
+		const healNeed = options.forceSkillConditions ? healRequirement(e.uniqueSkills) : 0;
+		let u, healTrigger = null;
+		if (healNeed > 0) {
+			const best = gainWithHealTrigger(nsamples, course, e, base, e.uniqueSkills, e.replaceGroup, seed, options, healNeed);
+			if (best != null) { u = {value: best.value, never: best.fired ? [] : e.uniqueSkills}; healTrigger = best.trigger; }
+			else u = {value: 0, never: e.uniqueSkills};   // no reliable trigger for this style
+		} else {
+			u = gain(e.uniqueSkills, e.replaceGroup);
+		}
 		const a = gain(e.awakenSkills);
 		data.set(e.key, {
 			key: e.key,
@@ -116,6 +175,7 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			// skills whose conditions were never met in any sample -- shown in the UI so a
 			// 0.00 reads as "never fired" rather than "fired but did nothing"
 			uniqueNeverFired: e.uniqueSkills.length > 0 && u.never.length > 0,
+			healTrigger,
 			awakenNeverFired: a.never.length,
 			awakenSimulated: e.awakenSkills.length,
 			pending: false

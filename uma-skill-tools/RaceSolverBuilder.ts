@@ -399,6 +399,7 @@ export class RaceSolverBuilder {
 	_pacer: HorseDesc | null
 	_forceActivateCounts: boolean
 	_forceMaxStacks: boolean
+	_healSeed: number | null
 	_pacerSkills: PendingSkill[]
 	_rng: Rule30CARng
 	_parser: {parse: any, tokenize: any}
@@ -437,6 +438,7 @@ export class RaceSolverBuilder {
 		this._hpPolicyFactory = (course, params, rng) => new GameHpPolicy(course, params.groundCondition, rng);
 		this._forceActivateCounts = false;
 		this._forceMaxStacks = false;
+		this._healSeed = null;
 		this._samplePolicyOverride = [null, new Map(), new Map(), new Map()];  // Perspectives start at 1
 		this._extraSkillHooks = [];
 		this._onSkillActivate = null;
@@ -551,6 +553,11 @@ export class RaceSolverBuilder {
 
 	forceActivateCounts(v: boolean = true) {
 		this._forceActivateCounts = v;
+		return this;
+	}
+
+	healSeed(n: number | null) {
+		this._healSeed = n;
 		return this;
 	}
 
@@ -686,6 +693,7 @@ export class RaceSolverBuilder {
 		clone._otherRawWisdom = this._otherRawWisdom;
 		clone._forceActivateCounts = this._forceActivateCounts;
 		clone._forceMaxStacks = this._forceMaxStacks;
+		clone._healSeed = this._healSeed;
 		clone._otherMood = this._otherMood;
 		clone._hpPolicyFactory = this._hpPolicyFactory;
 		clone._samplePolicyOverride = this._samplePolicyOverride.map(m => m == null ? null : new Map(m.entries()));
@@ -764,6 +772,7 @@ export class RaceSolverBuilder {
 				skills,
 				forceActivateCounts: this._forceActivateCounts,
 				forceMaxStacks: this._forceMaxStacks,
+				healSeed: this._healSeed,
 				pacer,
 				hp: this._hpPolicyFactory(this._course, this._raceParams, new Rule30CARng(solverRng.int32())),
 				rng: solverRng,

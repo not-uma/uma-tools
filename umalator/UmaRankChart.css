@@ -315,3 +315,16 @@ table.umaRankChart tbody tr[data-umakey] {
 	line-height: 1.25;
 	cursor: pointer;
 }
+
+.rankTriggerBadge {
+	display: inline-block;
+	margin-left: 5px;
+	padding: 0 4px;
+	border-radius: 3px;
+	background: #3d7fd0;
+	color: #fff;
+	font-size: 10px;
+	font-weight: bold;
+	vertical-align: middle;
+	cursor: help;
+}

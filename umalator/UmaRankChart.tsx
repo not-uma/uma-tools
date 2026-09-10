@@ -356,6 +356,10 @@ export function UmaRankChart(props) {
 			const r = info.row.original;
 			return <span>
 				{formatValue(info)}
+				{r.healTrigger &&
+					<span class="rankTriggerBadge"
+						title={`This unique needs a number of recovery skills to have activated. The value assumes the earlier ones happened and that ${r.healTrigger} supplied the last one, since it fires at a fixed point on this track.`}>
+						via {r.healTrigger}</span>}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
 				{r.replacesInherited &&
