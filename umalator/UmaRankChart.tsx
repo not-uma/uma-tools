@@ -361,9 +361,12 @@ export function UmaRankChart(props) {
 						title={`This unique only fires once several recovery skills have gone off.\n\n`
 							+ `Last recovery: ${r.healTrigger}`
 							+ (r.healBackups > 0
-								? ` (plus ${r.healBackups} other late recover${r.healBackups > 1 ? 'ies' : 'y'}, so only one of them has to pass its wit check)`
-								: ` (no backup, so it has to pass its own wit check)`)
-							+ `\n\nChance shown is the whole chain: the earlier recoveries passing their wit checks, then at least one late recovery passing.`
+								? ` (plus ${r.healBackups} other late recover${r.healBackups > 1 ? 'ies' : 'y'})`
+								: ` (no backup)`)
+							+ `\n\nChance shown is that enough of the recovery skills pass their wit checks: `
+							+ (r.healBackups > 0
+								? `3 out of 4, since the extra late recovery gives one spare.`
+								: `3 out of 3, with no spare.`)
 							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
 						via {r.healTrigger}{r.healBackups > 0 ? ` +${r.healBackups}` : ''} · {Math.round(r.healFireRate * 100)}%</span>}
 				{r.uniqueNeverFired && !r.pending &&

@@ -148,15 +148,24 @@ function gainWithHealTrigger(nsamples, course, e, base, ids, replaceGroup, seed,
 	//    max(1 - 90/wisdom, 0.2). Two late triggers cover each other's failures.
 	const final = measure(squad, true, nsamples);
 
-	// Reported chance covers the WHOLE requirement, not just the last skill. The
-	// earlier need-1 recoveries are assumed to be ordinary skills whose only
-	// obstacle is their own wit check, and the last one succeeds if ANY of the
-	// late candidates passes:
-	//     p^(need-1) * (1 - (1-p)^k)
+	// Reported chance covers the whole requirement. Carrying k late recoveries
+	// means the uma is running (need-1) + k recovery skills in total, each of
+	// which independently passes its wit check with probability p. The unique
+	// needs any `need` of them to land, so this is the binomial tail:
+	//     sum(i = need..n) C(n,i) p^i (1-p)^(n-i)
+	// With one late skill that collapses to p^need; with two it becomes
+	// "at least need out of need+1", which is why a backup helps.
 	const stats = buildBaseStats({...base, strategy: e.strategy} as any, base.mood != null ? base.mood : 2);
 	const p = Math.max(1 - 90 / stats.wisdom, 0.2);
 	const k = squad.length;
-	const chance = Math.pow(p, Math.max(need - 1, 0)) * (1 - Math.pow(1 - p, k));
+	const n = Math.max(need - 1, 0) + k;
+	let chance = 0;
+	for (let i = need; i <= n; ++i) {
+		let c = 1;
+		for (let j = 0; j < i; ++j) c = c * (n - j) / (j + 1);
+		chance += c * Math.pow(p, i) * Math.pow(1 - p, n - i);
+	}
+	chance = Math.min(chance, 1);
 
 	return {
 		value: final.value,
