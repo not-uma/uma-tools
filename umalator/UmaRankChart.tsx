@@ -368,7 +368,7 @@ export function UmaRankChart(props) {
 							+ `\n\nChance shown is that enough recovery skills pass their wit checks: `
 							+ (r.healBackups > 0 ? `3 of 4, the spare late recovery covering one failure.` : `3 of 3, no spare.`)
 							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
-						via {(r.healTriggers || [{name: r.healTrigger}]).map(t => t.name).join(' / ')} \u00b7 {Math.round(r.healFireRate * 100)}%</span>}
+						via {(r.healTriggers || [{name: r.healTrigger}]).map(t => t.name).join(' / ')} · {Math.round(r.healFireRate * 100)}%</span>}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
 				{r.replacesInherited &&
