@@ -316,6 +316,8 @@ table.umaRankChart tbody tr[data-umakey] {
 	cursor: pointer;
 }
 
+/* Kept deliberately short: the trigger names live in the tooltip. A long badge
+   here widens the Unique column and pushes Awakening off the table. */
 .rankTriggerBadge {
 	display: inline-block;
 	margin-left: 5px;
@@ -327,4 +329,8 @@ table.umaRankChart tbody tr[data-umakey] {
 	font-weight: bold;
 	vertical-align: middle;
 	cursor: help;
+	white-space: nowrap;
+	max-width: 68px;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }

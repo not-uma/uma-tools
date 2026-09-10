@@ -362,7 +362,7 @@ export function UmaRankChart(props) {
 					// say plainly that the per-trigger numbers need a rebuild.
 					const list = r.healTriggers || null;
 					const nBackup = list ? list.length - 1 : (r.healBackups || 0);
-					const names = list ? list.map(t => t.name).join(' / ') : r.healTrigger;
+					const names = list ? list.map(t => t.name).join(' / ') : r.healTrigger;   // tooltip only; the badge stays short
 					const detail = list
 						? list.map((t, i) => `${i === 0 ? 'Best trigger' : 'Backup'}: ${t.name} \u2014 ${t.value.toFixed(2)} L`).join('\n')
 						: `Best trigger: ${r.healTrigger}`
@@ -374,12 +374,12 @@ export function UmaRankChart(props) {
 						: `\n\nNo backup: if this one fails its wit check the unique does not fire at all.`;
 					const need = 3, total = need - 1 + nBackup + 1;
 					return <span class="rankTriggerBadge"
-						title={`This unique only fires once several recovery skills have gone off.\n\n`
+						title={`Triggered by: ${names}\n\nThis unique only fires once several recovery skills have gone off.\n\n`
 							+ detail + spare
 							+ `\n\nChance shown is that enough recovery skills pass their wit checks: ${need} of ${total}`
 							+ (nBackup > 0 ? `, the spare late recovery covering one failure.` : `, no spare.`)
 							+ (r.healPerSkill ? `\nPer-skill activation chance at this wit: ${Math.round(r.healPerSkill * 100)}%.` : '')}>
-						via {names} · {Math.round(r.healFireRate * 100)}%</span>;
+						{Math.round(r.healFireRate * 100)}%{nBackup > 0 ? ' ×' + (nBackup + 1) : ''}</span>;
 				})()}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
