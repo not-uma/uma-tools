@@ -358,8 +358,11 @@ export function UmaRankChart(props) {
 				{formatValue(info)}
 				{r.healTrigger &&
 					<span class="rankTriggerBadge"
-						title={`This unique needs a number of recovery skills to have activated. The value assumes the earlier ones happened and that ${r.healTrigger} supplied the last one, since it fires at a fixed point on this track.`}>
-						via {r.healTrigger}</span>}
+						title={`This unique needs several recovery skills to have activated first. The value assumes the earlier ones happened and that a reliable late skill supplied the last one.\n\n`
+							+ `Primary trigger: ${r.healTrigger}`
+							+ (r.healBackups > 0 ? `\n${r.healBackups} backup trigger${r.healBackups > 1 ? 's' : ''} also equipped, so a failed wit check on one is covered by another.` : '\nNo backup: if this fails its wit check the unique does not fire.')
+							+ `\n\nUnique actually fired in ${Math.round(r.healFireRate * 100)}% of runs.`}>
+						via {r.healTrigger}{r.healBackups > 0 ? ` +${r.healBackups}` : ''} · {Math.round(r.healFireRate * 100)}%</span>}
 				{r.uniqueNeverFired && !r.pending &&
 					<span class="rankNeverBadge" title={conditionHint(r.unique)}>never fired</span>}
 				{r.replacesInherited &&

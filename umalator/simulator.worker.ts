@@ -111,22 +111,48 @@ function healRequirement(ids: string[]) {
 }
 
 function gainWithHealTrigger(nsamples, course, e, base, ids, replaceGroup, seed, options, need) {
-	let best = null;
-	for (const cand of HEAL_TRIGGERS) {
-		if (cand.strategy != null && cand.strategy != e.strategy) continue;
-		if (!(cand.id in skillmeta)) continue;
+	const usable = HEAL_TRIGGERS.filter(c =>
+		(c.strategy == null || c.strategy == e.strategy) && (c.id in skillmeta));
+	if (usable.length == 0) return null;
+	const healOpts = {...options, collectRunData: false, healSeed: Math.max(need - 1, 0), forceSkillConditions: false};
+
+	function measure(cands, withWisdomChecks: boolean, n: number) {
 		const b2 = {...base, skills: new Map(base.skills.entries())};
-		b2.skills.set(skillmeta[cand.id].groupId, cand.id);
+		cands.forEach(c => b2.skills.set(skillmeta[c.id].groupId, c.id));
 		const withSkill = {...b2, skills: new Map(b2.skills.entries())};
 		if (replaceGroup != null) withSkill.skills.delete(replaceGroup);
 		ids.forEach(id => { const meta = skillmeta[id]; if (meta) withSkill.skills.set(meta.groupId, id); });
-		const o = {...options, collectRunData: false, healSeed: Math.max(need - 1, 0), forceSkillConditions: false};
-		const r = runComparison(nsamples, course, e.racedef, b2, withSkill, seed, o);
-		const value = r.results.reduce((a,b) => a+b, 0) / r.results.length;
-		const fired = ids.every(id => r.activations.get(id) > 0);
-		if (best == null || value > best.value) best = {value, trigger: cand.name, fired};
+		const r = runComparison(n, course, e.racedef, b2, withSkill,
+			seed, {...healOpts, useIntChecks: withWisdomChecks});
+		const samples = r.results.length;
+		return {
+			value: r.results.reduce((a,b) => a+b, 0) / samples,
+			fireRate: ids.length ? Math.min(...ids.map(id => (r.activations.get(id) || 0))) / samples : 0
+		};
 	}
-	return best;
+
+	// 1. score each candidate on its own. A candidate that fires early is bad here:
+	//    it satisfies the count before the unique's own distance gate, so the unique
+	//    fires at the gate instead of somewhere useful.
+	const solo = usable.map(c => ({c, ...measure([c], false, Math.max(nsamples >> 1, 5))}));
+	solo.sort((a,b) => b.value - a.value);
+	const best = solo[0];
+	if (best == null || !isFinite(best.value)) return null;
+
+	// 2. a candidate only works as a BACKUP if it fires about as late as the primary.
+	//    An earlier one would pre-empt the trigger and drag the value down.
+	const squad = solo.filter(x => x === best || x.value >= best.value * 0.95).map(x => x.c);
+
+	// 3. re-run the squad with wit checks on, so each trigger independently rolls
+	//    max(1 - 90/wisdom, 0.2). Two late triggers cover each other's failures.
+	const final = measure(squad, true, nsamples);
+	return {
+		value: final.value,
+		trigger: best.c.name,
+		backups: squad.length - 1,
+		fireRate: final.fireRate,
+		fired: final.fireRate > 0
+	};
 }
 
 function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseState, seed: [number,number], options) {
@@ -159,10 +185,15 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			return {value: results.reduce((a,b) => a+b, 0) / results.length, never};
 		}
 		const healNeed = options.forceSkillConditions ? healRequirement(e.uniqueSkills) : 0;
-		let u, healTrigger = null;
+		let u, healTrigger = null, healBackups = 0, healFireRate = 0;
 		if (healNeed > 0) {
 			const best = gainWithHealTrigger(nsamples, course, e, base, e.uniqueSkills, e.replaceGroup, seed, options, healNeed);
-			if (best != null) { u = {value: best.value, never: best.fired ? [] : e.uniqueSkills}; healTrigger = best.trigger; }
+			if (best != null) {
+				u = {value: best.value, never: best.fired ? [] : e.uniqueSkills};
+				healTrigger = best.trigger;
+				healBackups = best.backups;
+				healFireRate = best.fireRate;
+			}
 			else u = {value: 0, never: e.uniqueSkills};   // no reliable trigger for this style
 		} else {
 			u = gain(e.uniqueSkills, e.replaceGroup);
@@ -176,6 +207,8 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			// 0.00 reads as "never fired" rather than "fired but did nothing"
 			uniqueNeverFired: e.uniqueSkills.length > 0 && u.never.length > 0,
 			healTrigger,
+			healBackups,
+			healFireRate,
 			awakenNeverFired: a.never.length,
 			awakenSimulated: e.awakenSkills.length,
 			pending: false
