@@ -288,3 +288,24 @@ table.umaRankChart tbody tr[data-umakey] {
 	font-size: 11px;
 	word-break: break-word;
 }
+
+/* Checkbox rows in the sidebar. Without flex, a label long enough to wrap puts
+   its second line underneath the checkbox, which makes the rows look ragged. */
+.umaRankToggle {
+	display: flex;
+	align-items: flex-start;
+	gap: 5px;
+	margin-bottom: 4px;
+}
+
+.umaRankToggle input {
+	flex: none;
+	margin: 0;
+	position: relative;
+	top: 1px;
+}
+
+.umaRankToggle label {
+	line-height: 1.25;
+	cursor: pointer;
+}

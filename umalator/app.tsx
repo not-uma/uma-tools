@@ -1392,12 +1392,12 @@ function Umalator(props) {
 												<label for={`umaRankStyle_${st}`}>{STRATEGY_LABELS[st]}</label>
 											</div>)}
 									</fieldset>
-									<div>
+									<div class="umaRankToggle">
 										<input type="checkbox" id="umaRankIncludeSkills" checked={includeUmaSkills}
 											onClick={() => setIncludeUmaSkills(v => !v)} />
 										<label for="umaRankIncludeSkills" title="Off: only your stats and aptitudes are used. On: the skills currently on your uma are on the baseline too.">Include current skills</label>
 									</div>
-									<div>
+									<div class="umaRankToggle">
 										<input type="checkbox" id="umaRankForceConditions" checked={forceSkillConditions}
 											onClick={() => setForceSkillConditions(v => !v)} />
 										<label for="umaRankForceConditions" title="Treats skills that require other skills to have activated first (Tail Held High, Groundwork, Lightning Flare, etc) as if that requirement is already met. Corner and straight conditions are unaffected.">Force skill count conditions</label>
