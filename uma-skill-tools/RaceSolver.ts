@@ -225,6 +225,7 @@ export class RaceSolver {
 	activateCount: number[]
 	activateCountHeal: number
 	activateCountLastFrame: number
+	forcedActivationFloor: number
 	onSkillActivate: (s: RaceSolver, skillId: string, perspective: Perspective) => void
 	onSkillDeactivate: (s: RaceSolver, skillId: string, perspective: Perspective) => void
 	sectionLength: number
@@ -306,6 +307,9 @@ export class RaceSolver {
 		const forced = params.forceActivateCounts ? 99 : 0;
 		this.activateCount = [forced, forced, forced];
 		this.activateCountHeal = forced;
+		// is_activate_any_skill checks whether something fired THIS frame, so the
+		// cumulative counters above don't cover it. Hold a floor of 1 instead.
+		this.forcedActivationFloor = params.forceActivateCounts ? 1 : 0;
 		this.activateCountLastFrame = 0;
 		this.onSkillActivate = params.onSkillActivate || noop;
 		this.onSkillDeactivate = params.onSkillDeactivate || noop;
@@ -654,7 +658,7 @@ export class RaceSolver {
 		// because trigger.start <= trigger.end. So while pos is below the earliest
 		// remaining start there is nothing to do at all.
 		if (this.pos < this.minPendingStart && this.pendingRemoval.size == 0) {
-			this.activateCountLastFrame = 0;
+			this.activateCountLastFrame = this.forcedActivationFloor;
 			return;
 		}
 		let newMinStart = Infinity;
@@ -677,7 +681,7 @@ export class RaceSolver {
 			}
 		}
 		this.minPendingStart = newMinStart;
-		this.activateCountLastFrame = activateCountThisFrame;
+		this.activateCountLastFrame = Math.max(activateCountThisFrame, this.forcedActivationFloor);
 	}
 
 	// LOCAL PATCH. Mirrors the modifier-scaling table the upstream engine uses.

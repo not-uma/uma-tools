@@ -176,6 +176,7 @@ table.umaRankChart tbody tr[data-umakey] {
 }
 
 #umaRankStyleSelect {
+	align-self: stretch;
 	border: 1px solid #c4bcc9;
 	border-radius: 4px;
 	margin: 0 0 6px 0;
@@ -291,9 +292,14 @@ table.umaRankChart tbody tr[data-umakey] {
 
 /* Checkbox rows in the sidebar. Without flex, a label long enough to wrap puts
    its second line underneath the checkbox, which makes the rows look ragged. */
+/* #extendedOptionsRow is a centring flex column, so rows of different widths get
+   different left edges. Stretch these to the container width and left-align the
+   contents so the checkboxes stack in a straight line. */
 .umaRankToggle {
+	align-self: stretch;
 	display: flex;
 	align-items: flex-start;
+	justify-content: flex-start;
 	gap: 5px;
 	margin-bottom: 4px;
 }
