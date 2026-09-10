@@ -12,6 +12,7 @@ export function isDebuffSkill(id: string) {
 export function SkillSet(ids): Map<(typeof skillmeta)['groupId'], keyof typeof skills> {
 	return new Map(ids.reduce((acc, id) => {
 		const {entries, ndebuff} = acc;
+		if (!(id in skillmeta)) return acc;   // stale or unknown id, ignore it
 		const groupId = skillmeta[id].groupId;
 		if (isDebuffSkill(id)) {
 			entries.push([groupId + '-' + ndebuff, id]);
@@ -31,7 +32,10 @@ export function uniqueSkillForUma(oid: string, starCount: 1 | 2 | 3 | 4 | 5): ke
 	if (oid.length == 0) return '';
 	const i = +oid.slice(1, -2), v = +oid.slice(-2);
 	const sid = (10000 * (1 + 9 * +(starCount > 2)) + 10000 * (v - 1) + i * 10 + 1).toString();
-	assertIsSkill(sid);
+	// Below 3 stars this formula produces ids that do not exist for most outfits.
+	// assertIsSkill is only a console.assert, so it used to hand the bad id back and
+	// blow up later on skillmeta[id].groupId.
+	if (!(sid in skills) || !(sid in skillmeta)) return '';
 	return sid;
 }
 

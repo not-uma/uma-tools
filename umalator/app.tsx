@@ -961,6 +961,7 @@ function Umalator(props) {
 	}
 	const [umaRankStyles, setUmaRankStyles] = useState(() => new Set(ALL_STRATEGIES));
 	const [includeUmaSkills, setIncludeUmaSkills] = useState(false);
+	const [forceSkillConditions, setForceSkillConditions] = useState(false);
 
 	function toggleUmaRankStyle(strategy) {
 		setUmaRankStyles(cur => {
@@ -1001,7 +1002,7 @@ function Umalator(props) {
 		setUmaDetail({key, data: new Map(), simulated: skills});
 		workers[0].postMessage({msg: 'umadetail', data: {
 			key, strategy: e.strategy, skills, course, racedef: params, uma: detailUma,
-			options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills}
+			options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions}
 		}});
 	}
 
@@ -1041,7 +1042,7 @@ function Umalator(props) {
 		workers.reduce((rest, w) => {
 			w.postMessage({msg: 'umarank', data: {
 				entries: rest.slice(0, nPer), course, uma: rankUma,
-				options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills}
+				options: {seed, usePosKeep, useCompeteTop, useIntChecks: false, includeUmaSkills, forceSkillConditions}
 			}});
 			return rest.slice(nPer);
 		}, work);
@@ -1395,6 +1396,11 @@ function Umalator(props) {
 										<input type="checkbox" id="umaRankIncludeSkills" checked={includeUmaSkills}
 											onClick={() => setIncludeUmaSkills(v => !v)} />
 										<label for="umaRankIncludeSkills" title="Off: only your stats and aptitudes are used. On: the skills currently on your uma are on the baseline too.">Include current skills</label>
+									</div>
+									<div>
+										<input type="checkbox" id="umaRankForceConditions" checked={forceSkillConditions}
+											onClick={() => setForceSkillConditions(v => !v)} />
+										<label for="umaRankForceConditions" title="Treats skills that require other skills to have activated first (Tail Held High, Groundwork, Lightning Flare, etc) as if that requirement is already met. Corner and straight conditions are unaffected.">Force skill count conditions</label>
 									</div>
 								</div>
 						}

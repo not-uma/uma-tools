@@ -261,7 +261,8 @@ export class RaceSolver {
 		hp: HpPolicy,
 		pacer?: RaceSolver,
 		onSkillActivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
-		onSkillDeactivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void
+		onSkillDeactivate?: (s: RaceSolver, skillId: string, perspective: Perspective) => void,
+		forceActivateCounts?: boolean
 	}) {
 		// clone since green skills may modify the stat values
 		this.horse = Object.assign({}, params.horse);
@@ -298,8 +299,13 @@ export class RaceSolver {
 		this.activeTargetSpeedSkills = [];
 		this.activeCurrentSpeedSkills = [];
 		this.activeAccelSkills = [];
-		this.activateCount = [0,0,0];
-		this.activateCountHeal = 0;
+		// Pretend a pile of skills already fired, so conditions like
+		// activate_count_middle>=3 or activate_count_heal>=3 hold from the start.
+		// Only these counters are affected -- corner/straight/phase conditions come
+		// from course geometry and are untouched.
+		const forced = params.forceActivateCounts ? 99 : 0;
+		this.activateCount = [forced, forced, forced];
+		this.activateCountHeal = forced;
 		this.activateCountLastFrame = 0;
 		this.onSkillActivate = params.onSkillActivate || noop;
 		this.onSkillDeactivate = params.onSkillDeactivate || noop;

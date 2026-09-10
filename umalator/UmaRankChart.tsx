@@ -89,7 +89,7 @@ export function getUmaEntries() {
 			// inherited version in the data, so the swap could never match, and
 			// nobody races them at 2 stars anyway.
 			const unique = uniqueSkillForUma(oid, Math.max(o.rarity, 3) as 3 | 4 | 5);
-			if (!unique || !(unique in skilldata)) return;
+			if (!unique || !(unique in skilldata) || !(unique in skillmeta)) return;
 			const awakenings = dedupeAwakenings(o.awakenings);
 			const aptitudes = o.aptitudes.map(i => APT[i]);
 			const defaultStrategy = STRATEGIES[o.strategy];

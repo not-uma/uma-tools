@@ -96,7 +96,12 @@ function runUmaRound(nsamples: number, entries, course: CourseData, uma: HorseSt
 			if (ids.length == 0) return {value: 0, never: []};
 			const withSkill = {...base, skills: new Map(base.skills.entries())};
 			if (replaceGroup != null) withSkill.skills.delete(replaceGroup);
-			ids.forEach(id => withSkill.skills.set(skillmeta[id].groupId, id));
+			for (const id of ids) {
+				const meta = skillmeta[id];
+				// name the offending id rather than failing with a bare "reading 'groupId'"
+				if (meta == null) throw new Error(`skill ${id} is missing from skill_meta.json`);
+				withSkill.skills.set(meta.groupId, id);
+			}
 			const {results, activations} = runComparison(nsamples, course, e.racedef, base, withSkill, seed,
 				{...options, collectRunData: false});
 			const never = ids.filter(id => !(activations.get(id) > 0));

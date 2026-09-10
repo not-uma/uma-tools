@@ -397,6 +397,7 @@ export class RaceSolverBuilder {
 	_raceParams: PartialRaceParameters
 	_horse: HorseDesc | null
 	_pacer: HorseDesc | null
+	_forceActivateCounts: boolean
 	_pacerSkills: PendingSkill[]
 	_rng: Rule30CARng
 	_parser: {parse: any, tokenize: any}
@@ -433,6 +434,7 @@ export class RaceSolverBuilder {
 		this._otherRawWisdom = 2000;  // no good default really
 		this._otherMood = 2;
 		this._hpPolicyFactory = (course, params, rng) => new GameHpPolicy(course, params.groundCondition, rng);
+		this._forceActivateCounts = false;
 		this._samplePolicyOverride = [null, new Map(), new Map(), new Map()];  // Perspectives start at 1
 		this._extraSkillHooks = [];
 		this._onSkillActivate = null;
@@ -542,6 +544,11 @@ export class RaceSolverBuilder {
 				effects: [{type: SkillType.Accel, baseDuration: 1.2, modifier: 0.2}]
 			}];
 		}
+		return this;
+	}
+
+	forceActivateCounts(v: boolean = true) {
+		this._forceActivateCounts = v;
 		return this;
 	}
 
@@ -670,6 +677,7 @@ export class RaceSolverBuilder {
 		clone._useWisdomChecks = this._useWisdomChecks;
 		clone._wisdomSeeds = new Map(this._wisdomSeeds.entries());
 		clone._otherRawWisdom = this._otherRawWisdom;
+		clone._forceActivateCounts = this._forceActivateCounts;
 		clone._otherMood = this._otherMood;
 		clone._hpPolicyFactory = this._hpPolicyFactory;
 		clone._samplePolicyOverride = this._samplePolicyOverride.map(m => m == null ? null : new Map(m.entries()));
@@ -746,6 +754,7 @@ export class RaceSolverBuilder {
 				horse,
 				course: this._course,
 				skills,
+				forceActivateCounts: this._forceActivateCounts,
 				pacer,
 				hp: this._hpPolicyFactory(this._course, this._raceParams, new Rule30CARng(solverRng.int32())),
 				rng: solverRng,

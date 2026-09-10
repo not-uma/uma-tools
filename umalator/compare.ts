@@ -84,6 +84,7 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 	}
 	const compare = standard.fork();
 	standard.horse(uma1).otherRawWisdom(uma2.wisdom, uma2.mood);
+	if (options.forceSkillConditions) { standard.forceActivateCounts(); compare.forceActivateCounts(); }
 	compare.horse(uma2).otherRawWisdom(uma1.wisdom, uma1.mood);
 	const wisdomSeeds = new Map<string, [number,number]>();
 	const wisdomRng = new Rule30CARng(...seed);
@@ -92,7 +93,7 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 	// this is important to make sure the rng for their activations is synced
 	// sort first by groupId so that white and gold versions of a skill get added in the same order
 	const common = Array.from(new Set(uma1.skills.keys()).intersection(new Set(uma2.skills.keys()))).sort((a,b) => +a - +b);
-	const commonIdx = (id) => { let i = common.indexOf(skillmeta[id].groupId); return i > -1 ? i : common.length; };
+	const commonIdx = (id) => { const meta = skillmeta[id]; if (meta == null) return common.length; let i = common.indexOf(meta.groupId); return i > -1 ? i : common.length; };
 	const sort = (a,b) => commonIdx(a) - commonIdx(b) || +a - +b;
 	const u1id = uniqueSkillForUma(uma1.outfitId, uma1.starCount);
 	const u2id = uniqueSkillForUma(uma2.outfitId, uma2.starCount);

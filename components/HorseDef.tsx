@@ -436,7 +436,7 @@ export const HorseDef = memo(function HorseDef(props) {
 			starCount = Math.max(starCount, u.rarity);
 			strategy = ['', 'Nige', 'Senkou', 'Sasi', 'Oikomi'][u.strategy];
 			const uid = uniqueSkillForUma(id, starCount);
-			newSkills.set(skillmeta[uid].groupId, uid);
+			if (uid && uid in skillmeta) newSkills.set(skillmeta[uid].groupId, uid);
 		}
 		const uniqueLv = starCount % 3 + Math.floor(starCount / 3);
 		return {...state, outfitId: id, starCount, uniqueLv, strategy, skills: newSkills, aptitudes};
