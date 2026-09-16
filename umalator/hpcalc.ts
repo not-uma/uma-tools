@@ -93,6 +93,7 @@ export function runHpCalc(nsamples: number, course: CourseData, racedef: RacePar
 		.time(racedef.time)
 		.horse(uma)
 		.otherRawWisdom(debufUma.wisdom, debufUma.mood);
+	if (racedef.popularity != null) b0.popularity(racedef.popularity);
 	if (racedef.orderRange != null) {
 		b0
 			.order(racedef.orderRange[0], racedef.orderRange[1])

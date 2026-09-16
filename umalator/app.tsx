@@ -456,14 +456,25 @@ const ORDER_RANGE_FOR_STRATEGY = Object.freeze({
 	'Oonige': [1,1]
 });
 
-function racedefToParams({ground, weather, season, time, grade}: RaceParams, includeOrder?: string): RaceParameters {
+// popularity was previously left undefined here, which silently broke every skill
+// gated on it: `undefined >= 4` and `undefined < 4` are BOTH false, so both
+// alternatives of such a skill got an empty region and it could never fire.
+function racedefToParams({ground, weather, season, time, grade}: RaceParams, includeOrder?: string, popularity: number = 1): RaceParameters {
 	return {
 		groundCondition: ground, weather, season, time, grade,
 		skillId: '',
 		orderRange: includeOrder != null ? ORDER_RANGE_FOR_STRATEGY[includeOrder] : null,
-		numUmas: 9
+		numUmas: 9,
+		popularity
 	};
 }
+
+// Uma ranking doesn't know what popularity you'd run at, so it assumes you are a
+// favourite (popularity < 4), the weaker branch of skills like Laugh at the Odds.
+// "Max stacks from other skills" flips it to the generous end, the same way it
+// grants full stacks elsewhere.
+const RANK_POPULARITY_DEFAULT = 1;
+const RANK_POPULARITY_MAX = 9;
 
 async function serialize(courseId: number, nsamples: number, seed: number, usePosKeep: boolean, useCompeteTop: boolean, useIntChecks: boolean, racedef: RaceParams, hintLevels: Map<string,number>, uma1: HorseState, uma2: HorseState, debufUma: HorseState, chartMode: string | null, chartSkills: string[] | null) {
 	const o = {
@@ -887,7 +898,7 @@ function Umalator(props) {
 			data: {
 				nsamples,
 				course,
-				racedef: racedefToParams(racedef),
+				racedef: racedefToParams(racedef, null, uma1.popularity),
 				uma1: uma1,
 				uma2: uma2,
 				options: {seed, usePosKeep, useCompeteTop, useIntChecks}
@@ -903,7 +914,7 @@ function Umalator(props) {
 			data: {
 				nsamples,
 				course,
-				racedef: racedefToParams(racedef),
+				racedef: racedefToParams(racedef, null, uma1.popularity),
 				uma: uma1,
 				debufUma,
 				options: {seed, usePosKeep, useCompeteTop, useIntChecks, forceFullSpurt}
@@ -997,7 +1008,7 @@ function Umalator(props) {
 		const detailUma = includeUmaSkills ? stripOwnUnique(uma1) : uma1;
 		const base = includeUmaSkills ? {...detailUma, strategy: e.strategy}
 			: {...uma1, strategy: e.strategy, skills: new Map(), samplePolicies: new Map()};
-		const params = racedefToParams(racedef, e.strategy);
+		const params = racedefToParams(racedef, e.strategy, forceMaxStacks ? RANK_POPULARITY_MAX : RANK_POPULARITY_DEFAULT);
 		const skills = getActivateableSkills(e.awakenings, base, course, params)
 			.filter(id => !alreadyCovered(id, base.skills));
 		setUmaDetail({key, data: new Map(), simulated: skills});
@@ -1025,7 +1036,7 @@ function Umalator(props) {
 		const work = active.map(e => {
 			const base = includeUmaSkills ? {...rankUma, strategy: e.strategy}
 				: {...uma1, strategy: e.strategy, skills: new Map(), samplePolicies: new Map()};
-			const params = racedefToParams(racedef, e.strategy);
+			const params = racedefToParams(racedef, e.strategy, forceMaxStacks ? RANK_POPULARITY_MAX : RANK_POPULARITY_DEFAULT);
 			return {
 				key: e.key,
 				strategy: e.strategy,
@@ -1052,7 +1063,7 @@ function Umalator(props) {
 	function doBasinnChart() {
 		beginRun();
 		postEvent('doBasinnChart', {});
-		const params = racedefToParams(racedef, uma1.strategy);
+		const params = racedefToParams(racedef, uma1.strategy, uma1.popularity);
 		const skills = getActivateableSkills(chartMode != 'all' ? chartSkillsForMode(chartMode) : baseSkillsToTest.filter(id => {
 			const existing = uma1.skills.get(skillmeta[id].groupId);
 			const group = skillGroups.get(skillmeta[id].groupId);
@@ -1406,7 +1417,7 @@ function Umalator(props) {
 									<div class="umaRankToggle">
 										<input type="checkbox" id="umaRankMaxStacks" checked={forceMaxStacks}
 											onClick={() => setForceMaxStacks(v => !v)} />
-										<label for="umaRankMaxStacks" title="Skills that gain extra effect each time another skill activates while they are running (Lightning Flare, Luck Runs My Way, etc) get the maximum number of stacks immediately.">Max stacks from other skills</label>
+										<label for="umaRankMaxStacks" title="Two things at once. Skills that gain extra effect each time another skill activates while running (Lightning Flare, Luck Runs My Way) get full stacks immediately. And popularity is set to the underdog end instead of favourite, which is the stronger branch of skills like Laugh at the Odds.">Max stacks and popularity</label>
 									</div>
 								</div>
 						}

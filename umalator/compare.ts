@@ -77,6 +77,9 @@ export function runComparison(nsamples: number, course: CourseData, racedef: Rac
 		.weather(racedef.weather)
 		.season(racedef.season)
 		.time(racedef.time);
+	// the builder defaults popularity to 1 and never reads it off racedef, so skills
+	// gated on popularity (Laugh at the Odds) were stuck on the favourite branch
+	if (racedef.popularity != null) standard.popularity(racedef.popularity);
 	if (racedef.orderRange != null) {
 		standard
 			.order(racedef.orderRange[0], racedef.orderRange[1])
