@@ -257,12 +257,61 @@ function buildSkillEffects(skill, perspective: Perspective) {
 	}));
 }
 
+// LOCAL PATCH: mutually exclusive activate_count branches.
+//
+// A handful of skills split what is really one trigger into two alternatives
+// that differ only by an activate_count_* threshold. NY T.M. Opera O's unique
+// (Barcarole of Blessings, 110151 / 910151) is the motivating case: it grants
+// +0.45 target speed at >=7 skill activations and +0.35 at <=6, at the same
+// spot on the course.
+//
+// buildSkillData below only ever places the FIRST alternative whose region is
+// non-empty, because in general it cannot tell "two triggers, both fire" apart
+// from "two triggers, only one is meant to". That silently deletes the low
+// branch here: under the threshold the skill did nothing at all rather than
+// giving the smaller bonus.
+//
+// When the two branches are provably unsatisfiable together we can place both
+// and let the solver pick whichever holds at runtime. The solver additionally
+// latches the group (see RaceSolver.exclusiveLatched) so the pair can never
+// both fire -- necessary because the low branch's own activation bumps the
+// count over the threshold and would otherwise let the high branch fire too.
+function countBranchRange(op: string, n: number): [number, number] {
+	switch (op) {
+		case '>=': return [n, Infinity];
+		case '<=': return [-Infinity, n];
+		case '==': return [n, n];
+		default: return [-Infinity, Infinity];
+	}
+}
+
+export function exclusiveCountBranchPair(alternatives: {precondition?: string, condition: string}[]) {
+	// deliberately narrow: exactly two alternatives, identical apart from one
+	// activate_count_* clause on each side.
+	if (alternatives.length != 2) return false;
+	const [a, b] = alternatives;
+	if ((a.precondition || '') != (b.precondition || '')) return false;
+	// splitting on '&' below assumes a pure conjunction, so bail on any '@' (or)
+	if (a.condition.indexOf('@') > -1 || b.condition.indexOf('@') > -1) return false;
+	const ca = a.condition.split('&'), cb = b.condition.split('&');
+	const da = ca.filter(x => cb.indexOf(x) == -1), db = cb.filter(x => ca.indexOf(x) == -1);
+	if (da.length != 1 || db.length != 1) return false;
+	const re = /^(activate_count_\w+)(>=|<=|==)(\d+)$/;
+	const ma = da[0].match(re), mb = db[0].match(re);
+	if (ma == null || mb == null || ma[1] != mb[1]) return false;
+	const [lo1, hi1] = countBranchRange(ma[2], +ma[3]);
+	const [lo2, hi2] = countBranchRange(mb[2], +mb[3]);
+	return Math.max(lo1, lo2) > Math.min(hi1, hi2);
+}
+
 export function buildSkillData(horse: HorseParameters, raceParams: PartialRaceParameters, course: CourseData, wholeCourse: RegionList, parser: {parse: any, tokenize: any}, skillId: string, perspective: Perspective, ignoreNullEffects: boolean = false) {
 	if (!(skillId in skills)) {
 		throw new Error('bad skill ID ' + skillId);
 	}
 	const extra = Object.assign({skillId}, raceParams);
 	const alternatives = skills[skillId].alternatives;
+	// LOCAL PATCH: see exclusiveCountBranchPair above.
+	const exclusiveCounts = exclusiveCountBranchPair(alternatives);
 	const triggers = [];
 	for (let i = 0; i < alternatives.length; ++i) {
 		const skill = alternatives[i];
@@ -284,7 +333,7 @@ export function buildSkillData(horse: HorseParameters, raceParams: PartialRacePa
 		if (regions.length == 0) {
 			continue;
 		}
-		if (triggers.length > 0 && !/is_activate_other_skill_detail|is_used_skill_id/.test(skill.condition)) {
+		if (triggers.length > 0 && !exclusiveCounts && !/is_activate_other_skill_detail|is_used_skill_id/.test(skill.condition)) {
 			// i don't like this at all. the problem is some skills with two triggers (for example all the is_activate_other_skill_detail ones)
 			// need to place two triggers so the second effect can activate, however, some other skills with two triggers only ever activate one
 			// even if they have non-mutually-exclusive conditions (for example Jungle Pocket unique). i am not currently sure what distinguishes
@@ -307,7 +356,10 @@ export function buildSkillData(horse: HorseParameters, raceParams: PartialRacePa
 				samplePolicy: op.samplePolicy,
 				regions: regions,
 				extraCondition: extraCondition,
-				effects: effects
+				effects: effects,
+				// LOCAL PATCH: members of an exclusive branch pair share a key, so the
+				// solver can retire the siblings once one of them fires.
+				exclusiveGroup: exclusiveCounts ? skillId + '/' + perspective : null
 			});
 		}
 	}
@@ -331,7 +383,8 @@ export function buildSkillData(horse: HorseParameters, raceParams: PartialRacePa
 			samplePolicy: ImmediatePolicy,
 			regions: afterEnd,
 			extraCondition: (_) => false,
-			effects: effects
+			effects: effects,
+			exclusiveGroup: null
 		}];
 	}
 }
@@ -740,6 +793,7 @@ export class RaceSolverBuilder {
 		let lastskills = null;
 		for (let i = 0; i < this.nsamples; ++i) {
 			let skills;
+			const exclusiveWisdomRolls = new Map<string,boolean>();
 			if (lastskills != null) {
 				skills = lastskills;
 				lastskills = null;
@@ -751,8 +805,22 @@ export class RaceSolverBuilder {
 					wisdomCheck: sd.wisdomCheck,
 					trigger: triggers[sdi][i % triggers[sdi].length],
 					extraCondition: sd.extraCondition,
-					effects: sd.effects
-				})).filter(sd => !this._useWisdomChecks || !sd.wisdomCheck || wisdomRngs.get(sd.skillId).random() < skillActivationChance[sd.perspective]);
+					effects: sd.effects,
+					exclusiveGroup: sd.exclusiveGroup
+				})).filter(sd => {
+					if (!this._useWisdomChecks || !sd.wisdomCheck) return true;
+					// LOCAL PATCH: the two halves of an exclusive branch pair are one
+					// skill, so they share a single wit roll rather than rolling twice
+					// (which would let the matching branch fail while its sibling, which
+					// can never fire anyway, passes).
+					if (sd.exclusiveGroup != null) {
+						if (!exclusiveWisdomRolls.has(sd.exclusiveGroup)) {
+							exclusiveWisdomRolls.set(sd.exclusiveGroup, wisdomRngs.get(sd.skillId).random() < skillActivationChance[sd.perspective]);
+						}
+						return exclusiveWisdomRolls.get(sd.exclusiveGroup);
+					}
+					return wisdomRngs.get(sd.skillId).random() < skillActivationChance[sd.perspective];
+				});
 			}
 
 			const backupPacerRng = new Rule30CARng(pacerRng.lo, pacerRng.hi);

@@ -173,6 +173,10 @@ export interface PendingSkill {
 	trigger: Region
 	extraCondition: DynamicCondition
 	effects: SkillEffect[]
+	// LOCAL PATCH: set on both halves of a mutually exclusive activate_count
+	// branch pair (see exclusiveCountBranchPair in RaceSolverBuilder). At most one
+	// member of a group may activate per run.
+	exclusiveGroup?: string | null
 }
 
 interface ActiveSkill {
@@ -218,6 +222,7 @@ export class RaceSolver {
 	pendingSkills: PendingSkill[]
 	minPendingStart: number
 	pendingRemoval: Set<string>
+	exclusiveLatched: Set<string>
 	usedSkills: Set<string>
 	nHills: number
 	hillIdx: number
@@ -283,6 +288,7 @@ export class RaceSolver {
 		this.pendingSkills = params.skills.slice();  // copy since we remove from it
 		this.minPendingStart = -Infinity;  // force a full scan on the first frame
 		this.pendingRemoval = new Set();
+		this.exclusiveLatched = new Set();
 		this.usedSkills = new Set();
 		this.gorosiRng = new Rule30CARng(this.rng.int32());
 		this.paceEffectRng = new Rule30CARng(this.rng.int32());
@@ -692,8 +698,15 @@ export class RaceSolver {
 				// (and failed) before 564 procced, which is wrong
 				this.pendingSkills.splice(i,1);
 				this.pendingRemoval.delete(s.skillId);
+			} else if (s.exclusiveGroup != null && this.exclusiveLatched.has(s.exclusiveGroup)) {
+				// LOCAL PATCH: a sibling branch of this skill already fired. Retire this
+				// one without activating it. Checked before extraCondition because the
+				// sibling's own activation can push activate_count over the threshold and
+				// make this branch's condition true in the very same frame.
+				this.pendingSkills.splice(i,1);
 			} else if (this.pos >= s.trigger.start && s.extraCondition(this)) {
 				this.activateSkill(s);
+				if (s.exclusiveGroup != null) this.exclusiveLatched.add(s.exclusiveGroup);
 				this.pendingSkills.splice(i,1);
 				// TODO i don't exactly like hardcoding these; perhaps need some isRealSkill property on `PendingSkill` or move these mechanics out
 				// of RaceSolverBuilder and into RaceSolver

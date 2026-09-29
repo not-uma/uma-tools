@@ -64,6 +64,18 @@ export function IntroText(props) {
 							</details>
 						</li>
 
+						<li>
+							<details>
+								<summary>Engine fixes</summary>
+								<ul>
+									<li>Skills that split one trigger into a high and a low branch on skill-activation count now model both. Previously only the first branch was kept, so [New Year, Same Radiance!]T.M. Opera O's unique did nothing at all below 7 activations instead of giving its smaller bonus</li>
+									<li>A skill can still only fire one of those branches per run, so the low branch's own activation can no longer push the count over the threshold and let the high branch fire too</li>
+									<li>Popularity is now passed through to the simulation, so popularity-gated skills such as Laugh at the Odds evaluate against the popularity you set rather than always assuming the favourite</li>
+									<li>Every other skill is unaffected; verified identical across all 2,673 skills in the global and JP data</li>
+								</ul>
+							</details>
+						</li>
+
 						<li>Run button now shows progress while running, can be used to stop a run, and reports how long the run took</li>
 						<li>Race presets are now numbered by Champions Meeting, and cover CM 1 through CM 24</li>
 						<li>Your umas, track and settings are remembered between visits</li>
